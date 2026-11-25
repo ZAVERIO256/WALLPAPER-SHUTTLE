@@ -296,7 +296,7 @@ fun WallpaperShuttleApp(context: Context) {
                     "crop"
                 ) ?: "crop"
 
-                WallpaperImageProcessor.apply(
+                val wallpaperId = WallpaperImageProcessor.apply(
                     context,
                     uri,
                     displayMode,
@@ -308,7 +308,12 @@ fun WallpaperShuttleApp(context: Context) {
                     .putLong("last_rotation_time", System.currentTimeMillis())
                     .apply()
                 historyEntries = AppStorage.getHistory(context)
-                "Wallpaper applied successfully."
+                val appliedTo = when (destination) {
+                    WallpaperManager.FLAG_SYSTEM -> "Home screen"
+                    WallpaperManager.FLAG_LOCK -> "Lock screen"
+                    else -> "Home and Lock screens"
+                }
+                "Wallpaper applied to $appliedTo (confirmation ID $wallpaperId)."
             } catch (e: Exception) {
                 "Could not apply wallpaper: ${e.message}"
             }
@@ -681,6 +686,19 @@ fun WallpaperShuttleApp(context: Context) {
                             Text(
                                 if (isApplying) "APPLYING..."
                                 else "APPLY WALLPAPER"
+                            )
+                        }
+
+                        statusMessage?.let { message ->
+                            Text(
+                                message,
+                                color = if (message.startsWith("Wallpaper applied")) {
+                                    Color(0xFF86D6A3)
+                                } else {
+                                    Color(0xFFFFB4AB)
+                                },
+                                fontSize = 12.sp,
+                                lineHeight = 18.sp
                             )
                         }
 
