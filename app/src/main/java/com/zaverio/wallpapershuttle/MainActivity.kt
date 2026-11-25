@@ -66,7 +66,10 @@ private fun ensureActiveRotationService(context: Context) {
     if (!preferences.getBoolean("rotation_enabled", false)) return
 
     try {
-        WallpaperRotationService.start(context.applicationContext)
+        WallpaperRotationService.start(
+            context.applicationContext,
+            WallpaperRotationService.ACTION_ENSURE
+        )
     } catch (error: Exception) {
         preferences.edit()
             .putBoolean("foreground_rotation_service", false)
