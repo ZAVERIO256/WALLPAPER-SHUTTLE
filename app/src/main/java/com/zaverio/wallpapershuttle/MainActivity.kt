@@ -214,9 +214,9 @@ fun WallpaperShuttleApp(context: Context) {
     // Move users who were still on the old 10-second default to the new 5-second default.
     if (preferences.getInt("five_second_timer_migration", 0) < 1) {
         if (preferences.getInt("interval_seconds", 10) == 10) {
-            preferences.edit().putInt("interval_seconds", 5).apply()
+            preferences.edit().putInt("interval_seconds", 5).commit()
         }
-        preferences.edit().putInt("five_second_timer_migration", 1).apply()
+        preferences.edit().putInt("five_second_timer_migration", 1).commit()
     }
 
     var intervalSeconds by remember {
@@ -241,7 +241,7 @@ fun WallpaperShuttleApp(context: Context) {
         preferences.edit()
             .putString("display_mode", "crop")
             .putInt("fill_mode_default_migration", 1)
-            .apply()
+            .commit()
     }
 
     var displayMode by remember {
@@ -330,7 +330,7 @@ fun WallpaperShuttleApp(context: Context) {
 
                 preferences.edit()
                     .putString("folder_uri", uri.toString())
-                    .apply()
+                    .commit()
 
                 selectedFolder = uri
                 selectedImage = null
@@ -413,7 +413,7 @@ fun WallpaperShuttleApp(context: Context) {
                 AppStorage.addHistory(context, uri)
                 preferences.edit()
                     .putLong("last_rotation_time", System.currentTimeMillis())
-                    .apply()
+                    .commit()
                 historyEntries = AppStorage.getHistory(context)
                 val appliedTo = when (destination) {
                     WallpaperManager.FLAG_SYSTEM -> "Home screen"
@@ -964,7 +964,7 @@ fun WallpaperShuttleApp(context: Context) {
                                     destination = WallpaperManager.FLAG_SYSTEM
                                     preferences.edit()
                                         .putInt("destination", destination)
-                                        .apply()
+                                        .commit()
                                 },
                                 label = { Text("Home") }
                             )
@@ -975,7 +975,7 @@ fun WallpaperShuttleApp(context: Context) {
                                     destination = WallpaperManager.FLAG_LOCK
                                     preferences.edit()
                                         .putInt("destination", destination)
-                                        .apply()
+                                        .commit()
                                 },
                                 label = { Text("Lock") }
                             )
@@ -990,7 +990,7 @@ fun WallpaperShuttleApp(context: Context) {
                                         WallpaperManager.FLAG_LOCK
                                     preferences.edit()
                                         .putInt("destination", destination)
-                                        .apply()
+                                        .commit()
                                 },
                                 label = { Text("Both") }
                             )
@@ -1026,7 +1026,7 @@ fun WallpaperShuttleApp(context: Context) {
                                     displayMode = "crop"
                                     preferences.edit()
                                         .putString("display_mode", displayMode)
-                                        .apply()
+                                        .commit()
                                 },
                                 label = { Text("Crop") }
                             )
@@ -1037,7 +1037,7 @@ fun WallpaperShuttleApp(context: Context) {
                                     displayMode = "fit"
                                     preferences.edit()
                                         .putString("display_mode", displayMode)
-                                        .apply()
+                                        .commit()
                                 },
                                 label = { Text("Fit") }
                             )
@@ -1048,7 +1048,7 @@ fun WallpaperShuttleApp(context: Context) {
                                     displayMode = "stretch"
                                     preferences.edit()
                                         .putString("display_mode", displayMode)
-                                        .apply()
+                                        .commit()
                                 },
                                 label = { Text("Stretch") }
                             )
