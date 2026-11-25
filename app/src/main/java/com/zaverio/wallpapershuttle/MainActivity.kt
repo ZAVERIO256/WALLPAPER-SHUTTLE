@@ -137,18 +137,18 @@ fun WallpaperShuttleApp(context: Context) {
         )
     }
 
-    // One-time migration: make Fit the default so complete images are shown
-    // on both screens without cropping or launcher-style zoom.
-    if (preferences.getInt("fit_mode_default_migration", 0) < 1) {
+    // One-time migration: default to edge-to-edge Fill Screen on both displays.
+    // Fit remains available when the user wants to see every edge of an image.
+    if (preferences.getInt("fill_mode_default_migration", 0) < 1) {
         preferences.edit()
-            .putString("display_mode", "fit")
-            .putInt("fit_mode_default_migration", 1)
+            .putString("display_mode", "crop")
+            .putInt("fill_mode_default_migration", 1)
             .apply()
     }
 
     var displayMode by remember {
         mutableStateOf(
-            preferences.getString("display_mode", "fit") ?: "fit"
+            preferences.getString("display_mode", "crop") ?: "crop"
         )
     }
 
@@ -302,8 +302,8 @@ fun WallpaperShuttleApp(context: Context) {
             val result = try {
                 val displayMode = preferences.getString(
                     "display_mode",
-                    "fit"
-                ) ?: "fit"
+                    "crop"
+                ) ?: "crop"
 
                 val wallpaperId = WallpaperImageProcessor.apply(
                     context,
@@ -930,7 +930,7 @@ fun WallpaperShuttleApp(context: Context) {
                                         .putString("display_mode", displayMode)
                                         .apply()
                                 },
-                                label = { Text("Crop") }
+                                label = { Text("Fill Screen") }
                             )
 
                             FilterChip(
@@ -958,9 +958,9 @@ fun WallpaperShuttleApp(context: Context) {
 
                         Text(
                             when (displayMode) {
-                                "fit" -> "Shows the complete image with black space where needed."
-                                "stretch" -> "Fills the screen but may alter image proportions."
-                                else -> "Fills the screen while cropping excess image edges."
+                                "fit" -> "Shows the complete original image. Black space may appear where the image ratio differs from the screen."
+                                "stretch" -> "Fills every part of the screen but may distort the image."
+                                else -> "Fills the entire screen edge-to-edge, preserving image proportions while trimming excess edges."
                             },
                             color = Color.LightGray,
                             fontSize = 12.sp
@@ -1130,7 +1130,7 @@ fun WallpaperShuttleApp(context: Context) {
                                 "Wallpaper history" to "Review recently applied wallpapers and select one again.",
                                 "Image exclusions" to "Keep selected pictures out of automatic rotation, and restore them later.",
                                 "Home, Lock or Both" to "Choose which phone screen receives the wallpaper.",
-                                "Crop, Fit and Stretch" to "Control how each picture is displayed on your screen."
+                                "Fill Screen, Fit and Stretch" to "Choose edge-to-edge coverage, full-image viewing or stretched display."
                             )
                             aboutFeatures.forEachIndexed { index, feature ->
                                 Row(
@@ -1181,7 +1181,7 @@ fun WallpaperShuttleApp(context: Context) {
                             }
                             HorizontalDivider(color = Color(0xFF344055))
                             Text("DISPLAY MODES", color = Accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                            Text("Crop fills the screen and trims image edges. Fit keeps the full image visible and may leave empty space. Stretch fills the screen but can change the image proportions.", color = Color.LightGray, fontSize = 12.sp, lineHeight = 19.sp)
+                            Text("Fill Screen covers the entire display edge-to-edge and may trim image edges while preserving proportions. Fit shows the entire original image but can leave black space. Stretch fills the display but may distort the picture.", color = Color.LightGray, fontSize = 12.sp, lineHeight = 19.sp)
                             Text("Note: Android may delay background wallpaper changes to manage battery use. Rotation timing is therefore not guaranteed to be exact.", color = Color(0xFFB7C8FF), fontSize = 11.sp, lineHeight = 17.sp)
                         }
                     }
