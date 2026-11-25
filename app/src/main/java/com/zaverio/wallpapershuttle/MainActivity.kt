@@ -1037,11 +1037,7 @@ fun WallpaperShuttleApp(context: Context) {
                                         },
                                         trailingIcon = {
                                             if (intervalSeconds == seconds) {
-                                                Icon(
-                                                    imageVector = androidx.compose.material.icons.Icons.Default.Check,
-                                                    contentDescription = "Selected interval",
-                                                    tint = Accent
-                                                )
+                                                Text("✓", color = Accent, fontWeight = FontWeight.Bold)
                                             }
                                         }
                                     )
