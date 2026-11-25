@@ -1171,7 +1171,7 @@ fun WallpaperShuttleApp(context: Context) {
                                 "Wallpaper history" to "Review recently applied wallpapers and select one again.",
                                 "Image exclusions" to "Keep selected pictures out of automatic rotation, and restore them later.",
                                 "Home, Lock or Both" to "Choose which phone screen receives the wallpaper.",
-                                "Fill Screen, Fit and Stretch" to "Choose edge-to-edge coverage, full-image viewing or stretched display."
+                                "Crop (Fill Screen), Fit and Stretch" to "Choose edge-to-edge coverage, full-image viewing or stretched display."
                             )
                             aboutFeatures.forEachIndexed { index, feature ->
                                 Row(
@@ -1222,7 +1222,7 @@ fun WallpaperShuttleApp(context: Context) {
                             }
                             HorizontalDivider(color = Color(0xFF344055))
                             Text("DISPLAY MODES", color = Accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                            Text("Fill Screen covers the entire display edge-to-edge and may trim image edges while preserving proportions. Fit shows the entire original image but can leave black space. Stretch fills the display but may distort the picture.", color = Color.LightGray, fontSize = 12.sp, lineHeight = 19.sp)
+                            Text("Crop fills the display edge-to-edge while preserving proportions, trimming excess edges when needed. Fit shows the entire original image but can leave black space. Stretch fills the display but may distort the picture.", color = Color.LightGray, fontSize = 12.sp, lineHeight = 19.sp)
                             Text("Note: Android may delay background wallpaper changes to manage battery use. Rotation timing is therefore not guaranteed to be exact.", color = Color(0xFFB7C8FF), fontSize = 11.sp, lineHeight = 17.sp)
                         }
                     }
@@ -1245,7 +1245,7 @@ fun WallpaperShuttleApp(context: Context) {
                             Text("kdavidtyra@gmail.com", color = Color.White, fontSize = 13.sp)
                             Text("+256 701 303 855", color = Color.White, fontSize = 13.sp)
                             Text("App: Wallpaper Shuttle", color = Color.LightGray, fontSize = 11.sp)
-                            Text("Version 1.0", color = Color.LightGray, fontSize = 11.sp)
+                            Text("Version 1.1", color = Color.LightGray, fontSize = 11.sp)
                         }
                     }
 
