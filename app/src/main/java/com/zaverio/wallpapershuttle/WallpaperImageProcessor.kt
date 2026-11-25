@@ -34,10 +34,10 @@ object WallpaperImageProcessor {
         val screenWidth = metrics.widthPixels.coerceAtLeast(1)
         val screenHeight = metrics.heightPixels.coerceAtLeast(1)
 
-        val lockWidth = manager.desiredMinimumWidth
-            .takeIf { it > 0 } ?: screenWidth
-        val lockHeight = manager.desiredMinimumHeight
-            .takeIf { it > 0 } ?: screenHeight
+        // Use the physical display size for both destinations. Larger preferred
+        // wallpaper dimensions can create launcher/lock-screen panning and zoom.
+        val targetWidth = screenWidth
+        val targetHeight = screenHeight
 
         // Read source bounds first. A null bitmap is expected for inJustDecodeBounds.
         val bounds = BitmapFactory.Options().apply {
@@ -142,7 +142,7 @@ object WallpaperImageProcessor {
             var lockError: Exception? = null
 
             if (homeRequested) {
-                val homeBitmap = createScreenBitmap(screenWidth, screenHeight)
+                val homeBitmap = createScreenBitmap(targetWidth, targetHeight)
                 try {
                     // Use the physical display size for Home so multi-page launchers
                     // have no extra-wide image to pan across their workspace.
@@ -157,9 +157,9 @@ object WallpaperImageProcessor {
             }
 
             if (lockRequested) {
-                val lockBitmap = createScreenBitmap(lockWidth, lockHeight)
+                val lockBitmap = createScreenBitmap(targetWidth, targetHeight)
                 try {
-                    // Preserve the device's preferred wallpaper dimensions for Lock.
+                    // Keep Lock at the same one-screen canvas size as Home.
                     lockId = manager.setBitmap(
                         lockBitmap, null, true, WallpaperManager.FLAG_LOCK
                     )
