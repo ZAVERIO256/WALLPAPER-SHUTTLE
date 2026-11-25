@@ -64,6 +64,9 @@ class WallpaperRotationService : Service() {
     private lateinit var rotationThread: HandlerThread
     private lateinit var rotationHandler: Handler
     private var wakeLock: PowerManager.WakeLock? = null
+    private var wakeLockAcquiredAt = 0L
+    private var cachedImages: List<Uri> = emptyList()
+    private var lastImageScanAt = 0L
     private var lastStatus: String = "Rotation is active"
 
     private val rotationTask = object : Runnable {
@@ -187,11 +190,17 @@ class WallpaperRotationService : Service() {
         // Keep the CPU awake for short, high-frequency rotation. For long
         // intervals release it so the phone can sleep and conserve battery.
         if (intervalSeconds <= 300) {
-            if (!lock.isHeld) {
+            val now = SystemClock.elapsedRealtime()
+            val shouldRefresh = !lock.isHeld ||
+                now - wakeLockAcquiredAt >= TimeUnit.MINUTES.toMillis(20)
+            if (shouldRefresh) {
+                if (lock.isHeld) lock.release()
                 lock.acquire(TimeUnit.MINUTES.toMillis(30))
+                wakeLockAcquiredAt = now
             }
         } else if (lock.isHeld) {
             lock.release()
+            wakeLockAcquiredAt = 0L
         }
     }
 
@@ -298,10 +307,18 @@ class WallpaperRotationService : Service() {
             val folder = DocumentFile.fromTreeUri(this, Uri.parse(folderString))
                 ?: throw IllegalStateException("The selected image folder is unavailable.")
 
+            val now = SystemClock.elapsedRealtime()
+            if (cachedImages.isEmpty() ||
+                now - lastImageScanAt >= TimeUnit.MINUTES.toMillis(5)
+            ) {
+                cachedImages = collectImages(folder)
+                lastImageScanAt = now
+            }
+
             val excluded = preferences.getStringSet("excluded_uris", emptySet())
                 ?.toSet() ?: emptySet()
 
-            val eligibleImages = collectImages(folder).filterNot {
+            val eligibleImages = cachedImages.filterNot {
                 it.toString() in excluded
             }
 
@@ -348,6 +365,7 @@ class WallpaperRotationService : Service() {
 
         if (wakeLock?.isHeld == true) {
             wakeLock?.release()
+            wakeLockAcquiredAt = 0L
         }
 
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
@@ -363,6 +381,7 @@ class WallpaperRotationService : Service() {
         rotationHandler.removeCallbacksAndMessages(null)
         if (wakeLock?.isHeld == true) {
             wakeLock?.release()
+            wakeLockAcquiredAt = 0L
         }
         if (::rotationThread.isInitialized) {
             rotationThread.quitSafely()
