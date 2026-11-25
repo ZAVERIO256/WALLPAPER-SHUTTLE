@@ -10,7 +10,7 @@ Wallpaper Shuttle is an offline-first Android wallpaper manager by David-Tyra.
 - Apply a wallpaper to the Home screen, Lock screen, or both.
 - Choose Crop (edge-to-edge), Fit (show the whole image), or Stretch.
 - Random automatic wallpaper rotation, with repeats allowed.
-- Choose rotation intervals from 10 seconds to 24 hours.
+- Choose rotation intervals from 5 seconds to 24 hours.
 - Keep a wallpaper history and exclude or restore pictures.
 - Save app settings locally and resume scheduled rotation after device restarts through WorkManager.
 
@@ -24,7 +24,7 @@ Wallpaper Shuttle is an offline-first Android wallpaper manager by David-Tyra.
 
 ## Rotation timing and Android behaviour
 
-The minimum selectable interval is 10 seconds. Wallpaper Shuttle schedules automatic changes with Android WorkManager so scheduled work can persist across app restarts and device reboots. Android may defer background work because of Doze, battery optimisation, or manufacturer power management. Therefore, short intervals are best-effort and are not exact alarms.
+The minimum selectable interval is 5 seconds. Wallpaper Shuttle schedules automatic changes with Android WorkManager so scheduled work can persist across app restarts and device reboots. Android may defer background work because of Doze, battery optimisation, or manufacturer power management. Therefore, short intervals are best-effort and are not exact alarms.
 
 The app intentionally does not request notification permission or show routine notifications.
 
