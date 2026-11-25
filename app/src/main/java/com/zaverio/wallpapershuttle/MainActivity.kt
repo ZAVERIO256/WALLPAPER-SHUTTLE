@@ -1124,7 +1124,7 @@ fun WallpaperShuttleApp(context: Context) {
                         }
 
                         Text(
-                            "Choose from 5 seconds up to 24 hours. Android may delay background changes to save battery.",
+                            "Short intervals use a continuous foreground service and keep the CPU awake for more reliable timing. This uses more battery. Longer intervals allow the CPU to sleep.",
                             color = Color.LightGray,
                             fontSize = 12.sp
                         )
@@ -1153,7 +1153,7 @@ fun WallpaperShuttleApp(context: Context) {
                         )
 
                         Text(
-                            "Android may delay background changes to protect battery life.",
+                            "An ongoing silent notification stays visible while rotation is active. Press Pause to stop it.",
                             color = Color.LightGray,
                             fontSize = 11.sp
                         )
@@ -1243,7 +1243,7 @@ fun WallpaperShuttleApp(context: Context) {
                         ) {
                             Text("WHAT YOU CAN DO", color = Accent, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             val aboutFeatures = listOf(
-                                "Automatic wallpaper rotation" to "Let your selected pictures change at the interval you choose.",
+                                "Automatic wallpaper rotation" to "Run continuous user-started rotation through an ongoing foreground service.",
                                 "Your own image folders" to "Choose a folder on your device and scan its images, including subfolders.",
                                 "Gallery and random shuffle" to "Preview available pictures and select a random image whenever you like.",
                                 "Wallpaper history" to "Review recently applied wallpapers and select one again.",
@@ -1301,7 +1301,7 @@ fun WallpaperShuttleApp(context: Context) {
                             HorizontalDivider(color = Color(0xFF344055))
                             Text("DISPLAY MODES", color = Accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             Text("Crop fills the display edge-to-edge while preserving proportions, trimming excess edges when needed. Fit shows the entire original image but can leave black space. Stretch fills the display but may distort the picture.", color = Color.LightGray, fontSize = 12.sp, lineHeight = 19.sp)
-                            Text("Background rotation is scheduled with Android WorkManager and can continue when you close the app normally. Android restores scheduled work after a device restart. Do not use Force stop; allow background activity and remove battery restrictions for the most reliable operation. The system can still delay changes to manage battery use.", color = Color(0xFFB7C8FF), fontSize = 11.sp, lineHeight = 17.sp)
+                            Text("Automatic rotation uses an ongoing silent notification and a foreground service. For intervals up to 5 minutes, the app keeps the CPU awake so changes can happen while the screen is off. This can noticeably increase battery use. Android and Infinix XOS can still stop background activity under strict power restrictions. Force stop always disables it until you open the app again.", color = Color(0xFFB7C8FF), fontSize = 11.sp, lineHeight = 17.sp)
                         }
                     }
 
@@ -1323,7 +1323,7 @@ fun WallpaperShuttleApp(context: Context) {
                             Text("kdavidtyra@gmail.com", color = Color.White, fontSize = 13.sp)
                             Text("+256 701 303 855", color = Color.White, fontSize = 13.sp)
                             Text("App: Wallpaper Shuttle", color = Color.LightGray, fontSize = 11.sp)
-                            Text("Version 1.3", color = Color.LightGray, fontSize = 11.sp)
+                            Text("Version 1.4", color = Color.LightGray, fontSize = 11.sp)
                         }
                     }
 
