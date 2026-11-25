@@ -71,7 +71,10 @@ class WallpaperRotationWorker(
             Context.MODE_PRIVATE
         )
 
-        if (!preferences.getBoolean("rotation_enabled", false)) {
+        if (!preferences.getBoolean("rotation_enabled", false) ||
+            preferences.getBoolean("foreground_rotation_service", false)
+        ) {
+            // Continuous service owns rotation when active; never run both engines.
             return Result.success()
         }
 
@@ -145,7 +148,9 @@ class WallpaperRotationWorker(
     private fun scheduleNextRotation(
         preferences: android.content.SharedPreferences
     ) {
-        if (!preferences.getBoolean("rotation_enabled", false)) {
+        if (!preferences.getBoolean("rotation_enabled", false) ||
+            preferences.getBoolean("foreground_rotation_service", false)
+        ) {
             return
         }
 
