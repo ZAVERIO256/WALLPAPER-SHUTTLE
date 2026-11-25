@@ -1026,45 +1026,169 @@ fun WallpaperShuttleApp(context: Context) {
 
                 }
                 if (selectedTab == 3) {
-                // DEVELOPER FOOTER
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
+                    // ABOUT — app overview, feature guide, developer and support
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = CardBackground),
+                        shape = RoundedCornerShape(24.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(22.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(82.dp)
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .border(1.dp, Accent.copy(alpha = 0.65f), RoundedCornerShape(24.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("WS", color = Accent, fontSize = 30.sp, fontWeight = FontWeight.Black)
+                            }
+                            Text(
+                                "WALLPAPER SHUTTLE",
+                                color = Color.White,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "Your wallpapers. Your style.",
+                                color = Accent,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                "A personal wallpaper manager that helps you organise your favourite images and change the look of your phone automatically.",
+                                color = Color.LightGray,
+                                fontSize = 13.sp,
+                                lineHeight = 20.sp
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceEvenly
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("OFFLINE", color = Accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    Text("Designed for local use", color = Color.LightGray, fontSize = 10.sp)
+                                }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("1–1440", color = Accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    Text("Minutes interval", color = Color.LightGray, fontSize = 10.sp)
+                                }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("3 MODES", color = Accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    Text("Home • Lock • Both", color = Color.LightGray, fontSize = 10.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = CardBackground),
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(18.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text("WHAT YOU CAN DO", color = Accent, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            val aboutFeatures = listOf(
+                                "Automatic wallpaper rotation" to "Let your selected pictures change at the interval you choose.",
+                                "Your own image folders" to "Choose a folder on your device and scan its images, including subfolders.",
+                                "Gallery and random shuffle" to "Preview available pictures and select a random image whenever you like.",
+                                "Wallpaper history" to "Review recently applied wallpapers and select one again.",
+                                "Image exclusions" to "Keep selected pictures out of automatic rotation, and restore them later.",
+                                "Home, Lock or Both" to "Choose which phone screen receives the wallpaper.",
+                                "Crop, Fit and Stretch" to "Control how each picture is displayed on your screen."
+                            )
+                            aboutFeatures.forEachIndexed { index, feature ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(RoundedCornerShape(9.dp))
+                                            .border(1.dp, Accent.copy(alpha = 0.45f), RoundedCornerShape(9.dp)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("${index + 1}", color = Accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    Column(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                                    ) {
+                                        Text(feature.first, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                        Text(feature.second, color = Color.LightGray, fontSize = 12.sp, lineHeight = 18.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = CardBackground),
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(18.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text("GETTING STARTED", color = Accent, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            val steps = listOf(
+                                "1. Open Gallery and choose the folder containing your wallpapers.",
+                                "2. Wait for the folder scan to finish and browse your images.",
+                                "3. Open Settings to choose Home, Lock or Both and your display mode.",
+                                "4. Set the rotation interval, then return to Home and tap Start.",
+                                "5. Use Pause whenever you want to stop automatic changes."
+                            )
+                            steps.forEach { step ->
+                                Text(step, color = Color.LightGray, fontSize = 12.sp, lineHeight = 19.sp)
+                            }
+                            HorizontalDivider(color = Color(0xFF344055))
+                            Text("DISPLAY MODES", color = Accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Text("Crop fills the screen and trims image edges. Fit keeps the full image visible and may leave empty space. Stretch fills the screen but can change the image proportions.", color = Color.LightGray, fontSize = 12.sp, lineHeight = 19.sp)
+                            Text("Note: Android may delay background wallpaper changes to manage battery use. Rotation timing is therefore not guaranteed to be exact.", color = Color(0xFFB7C8FF), fontSize = 11.sp, lineHeight = 17.sp)
+                        }
+                    }
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = CardBackground),
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(18.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(7.dp)
+                        ) {
+                            Text("DEVELOPER", color = Accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Text("David-Tyra", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+                            Text("Created with care for personalisation and simplicity.", color = Color.LightGray, fontSize = 12.sp)
+                            HorizontalDivider(color = Color(0xFF344055))
+                            Text("CONTACT & SUPPORT", color = Accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Text("kdavidtyra@gmail.com", color = Color.White, fontSize = 13.sp)
+                            Text("+256 701 303 855", color = Color.White, fontSize = 13.sp)
+                            Text("App: Wallpaper Shuttle", color = Color.LightGray, fontSize = 11.sp)
+                            Text("Version 1.0", color = Color.LightGray, fontSize = 11.sp)
+                        }
+                    }
+
                     Text(
-                        "ABOUT THE DEVELOPER",
+                        "Thank you for using Wallpaper Shuttle.",
+                        modifier = Modifier.fillMaxWidth(),
                         color = Accent,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Text(
-                        "David-Tyra",
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-
-                    Text(
-                        "kdavidtyra@gmail.com",
-                        color = Color.LightGray,
-                        fontSize = 12.sp
-                    )
-
-                    Text(
-                        "+256 701 303 855",
-                        color = Color.LightGray,
-                        fontSize = 12.sp
-                    )
-
-                    Text(
-                        "OFFLINE WALLPAPER MANAGER • VERSION 1.0",
-                        color = Color.Gray,
-                        fontSize = 9.sp
+                        fontSize = 12.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                 }
-            }
 
             NavigationBar(
                 containerColor = CardBackground,
