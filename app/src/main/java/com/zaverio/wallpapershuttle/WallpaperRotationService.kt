@@ -337,8 +337,7 @@ class WallpaperRotationService : Service() {
                 ?: throw IllegalStateException("The selected image folder is unavailable.")
 
             val now = SystemClock.elapsedRealtime()
-            if (cachedImages.isEmpty() ||
-                cachedFolderUri != folderString ||
+            if (cachedFolderUri != folderString ||
                 now - lastImageScanAt >= TimeUnit.MINUTES.toMillis(5)
             ) {
                 cachedImages = collectImages(folder)
