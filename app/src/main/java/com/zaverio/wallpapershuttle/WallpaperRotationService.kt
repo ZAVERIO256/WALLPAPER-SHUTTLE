@@ -39,6 +39,7 @@ class WallpaperRotationService : Service() {
     companion object {
         const val ACTION_START = "com.zaverio.wallpapershuttle.action.START_ROTATION"
         const val ACTION_STOP = "com.zaverio.wallpapershuttle.action.STOP_ROTATION"
+        const val ACTION_ENSURE = "com.zaverio.wallpapershuttle.action.ENSURE_ROTATION"
         const val ACTION_UPDATE_INTERVAL =
             "com.zaverio.wallpapershuttle.action.UPDATE_ROTATION_INTERVAL"
 
@@ -54,6 +55,8 @@ class WallpaperRotationService : Service() {
         }
 
         fun stop(context: Context) {
+            WorkManager.getInstance(context.applicationContext)
+                .cancelUniqueWork(WallpaperRotationWorker.WORK_NAME)
             context.stopService(
                 Intent(context, WallpaperRotationService::class.java)
             )
@@ -66,7 +69,9 @@ class WallpaperRotationService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var wakeLockAcquiredAt = 0L
     private var cachedImages: List<Uri> = emptyList()
+    private var cachedFolderUri: String? = null
     private var lastImageScanAt = 0L
+    private var loopScheduled = false
     private var lastStatus: String = "Rotation is active"
 
     private val rotationTask = object : Runnable {
@@ -98,6 +103,7 @@ class WallpaperRotationService : Service() {
                 .commit()
 
             updateForegroundNotification(intervalSeconds)
+            loopScheduled = true
             rotationHandler.postDelayed(this, remainingDelay)
         }
     }
@@ -144,21 +150,35 @@ class WallpaperRotationService : Service() {
                     .coerceIn(5, 86400)
                 maintainWakeLock(seconds)
 
-                rotationHandler.removeCallbacks(rotationTask)
-                if (intent?.action == ACTION_UPDATE_INTERVAL) {
-                    val seconds = preferences.getInt("interval_seconds", 5)
-                        .coerceIn(5, 86400)
-                    maintainWakeLock(seconds)
-                    val nextChangeAt = System.currentTimeMillis() +
-                        TimeUnit.SECONDS.toMillis(seconds.toLong())
-                    preferences.edit().putLong("next_rotation_time", nextChangeAt).commit()
-                    updateForegroundNotification(seconds)
-                    rotationHandler.postDelayed(
-                        rotationTask,
-                        TimeUnit.SECONDS.toMillis(seconds.toLong())
-                    )
-                } else {
-                    rotationHandler.post(rotationTask)
+                when (intent?.action) {
+                    ACTION_UPDATE_INTERVAL -> {
+                        rotationHandler.removeCallbacks(rotationTask)
+                        val seconds = preferences.getInt("interval_seconds", 5)
+                            .coerceIn(5, 86400)
+                        maintainWakeLock(seconds)
+                        val nextChangeAt = System.currentTimeMillis() +
+                            TimeUnit.SECONDS.toMillis(seconds.toLong())
+                        preferences.edit().putLong("next_rotation_time", nextChangeAt).commit()
+                        updateForegroundNotification(seconds)
+                        loopScheduled = true
+                        rotationHandler.postDelayed(
+                            rotationTask,
+                            TimeUnit.SECONDS.toMillis(seconds.toLong())
+                        )
+                    }
+                    ACTION_ENSURE -> {
+                        // Reopening the app should repair a missing service without
+                        // restarting an already-running countdown.
+                        if (!loopScheduled) {
+                            loopScheduled = true
+                            rotationHandler.post(rotationTask)
+                        }
+                    }
+                    else -> {
+                        rotationHandler.removeCallbacks(rotationTask)
+                        loopScheduled = true
+                        rotationHandler.post(rotationTask)
+                    }
                 }
                 return START_STICKY
             }
@@ -309,9 +329,11 @@ class WallpaperRotationService : Service() {
 
             val now = SystemClock.elapsedRealtime()
             if (cachedImages.isEmpty() ||
+                cachedFolderUri != folderString ||
                 now - lastImageScanAt >= TimeUnit.MINUTES.toMillis(5)
             ) {
                 cachedImages = collectImages(folder)
+                cachedFolderUri = folderString
                 lastImageScanAt = now
             }
 
@@ -353,6 +375,7 @@ class WallpaperRotationService : Service() {
     }
 
     private fun stopServiceCleanly() {
+        loopScheduled = false
         rotationHandler.removeCallbacks(rotationTask)
         preferences.edit()
             .putBoolean("rotation_enabled", false)
@@ -378,6 +401,7 @@ class WallpaperRotationService : Service() {
     }
 
     override fun onDestroy() {
+        loopScheduled = false
         rotationHandler.removeCallbacksAndMessages(null)
         if (wakeLock?.isHeld == true) {
             wakeLock?.release()
