@@ -228,16 +228,28 @@ fun WallpaperShuttleApp(context: Context) {
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
         try {
-            WallpaperRotationService.start(context)
+            WallpaperRotationService.start(
+                context,
+                WallpaperRotationService.ACTION_ENSURE
+            )
             if (!granted) {
                 statusMessage =
                     "Rotation is active. Android may show its service indicator in system task manager instead of the notification drawer."
             }
         } catch (error: Exception) {
-            preferences.edit().putBoolean("rotation_enabled", false)
-                .putBoolean("foreground_rotation_service", false).commit()
-            rotationRunning = false
-            statusMessage = "Could not start continuous rotation: ${error.message}"
+            statusMessage = "Notification permission was updated, but rotation could not be checked: ${error.message}"
+        }
+    }
+
+    LaunchedEffect(rotationRunning) {
+        if (rotationRunning &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 
@@ -339,24 +351,17 @@ fun WallpaperShuttleApp(context: Context) {
         rotationRunning = true
         statusMessage = "Continuous automatic wallpaper rotation started."
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        } else {
-            try {
-                WallpaperRotationService.start(context)
-            } catch (error: Exception) {
-                preferences.edit()
-                    .putBoolean("rotation_enabled", false)
-                    .putBoolean("foreground_rotation_service", false)
-                    .commit()
-                rotationRunning = false
-                statusMessage = "Could not start continuous rotation: ${error.message}"
-            }
+        try {
+            // Start immediately; the permission request is handled separately so
+            // denying notification visibility does not delay wallpaper rotation.
+            WallpaperRotationService.start(context)
+        } catch (error: Exception) {
+            preferences.edit()
+                .putBoolean("rotation_enabled", false)
+                .putBoolean("foreground_rotation_service", false)
+                .commit()
+            rotationRunning = false
+            statusMessage = "Could not start continuous rotation: ${error.message}"
         }
     }
 
