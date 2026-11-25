@@ -24,9 +24,13 @@ Wallpaper Shuttle is an offline-first Android wallpaper manager by David-Tyra.
 
 ## Rotation timing and Android behaviour
 
-The minimum selectable interval is 5 seconds. Wallpaper Shuttle schedules automatic changes with Android WorkManager so scheduled work can persist across app restarts and device reboots. Android may defer background work because of Doze, battery optimisation, or manufacturer power management. Therefore, short intervals are best-effort and are not exact alarms.
+The minimum selectable interval is 5 seconds. Wallpaper Shuttle schedules automatic changes with Android WorkManager. The schedule is stored persistently, continues when the app is closed normally, and WorkManager restores scheduled jobs after device reboots. When the app is opened, it checks whether an active rotation job exists and repairs the schedule if needed.
 
-The app intentionally does not request notification permission or show routine notifications.
+Android may defer background work because of Doze, battery optimisation, app standby, or manufacturer power management. Therefore, short intervals are best-effort and are not exact alarms. The Android Force stop action prevents scheduled background work until the user launches the app again; an app cannot override that system restriction.
+
+For more reliable background operation on Infinix/XOS, allow Wallpaper Shuttle's background activity, enable its auto-start option if available, and avoid battery-restricting or power-saving modes. Menu names vary by XOS version.
+
+The app intentionally does not request notification permission or show routine notifications. It does not use a persistent foreground-service notification.
 
 ## Privacy and storage
 
