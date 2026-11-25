@@ -12,7 +12,10 @@ Wallpaper Shuttle is an offline-first Android wallpaper manager by David-Tyra.
 - Random automatic wallpaper rotation, with repeats allowed.
 - Choose rotation intervals from 5 seconds to 24 hours.
 - Keep a wallpaper history and exclude or restore pictures.
-- Save app settings locally and resume scheduled rotation after device restarts through WorkManager.
+- Run continuous wallpaper rotation in a foreground service with a silent ongoing notification.
+- Keep the CPU awake for intervals of five minutes or less while rotation is active; longer intervals release the wake lock to conserve battery.
+- Resume user-enabled rotation after device restart or app replacement when Android permits the service to start.
+- Save app settings locally and retain WorkManager as a fallback if a foreground service cannot start.
 
 ## Using the app
 
@@ -24,13 +27,13 @@ Wallpaper Shuttle is an offline-first Android wallpaper manager by David-Tyra.
 
 ## Rotation timing and Android behaviour
 
-The minimum selectable interval is 5 seconds. Wallpaper Shuttle schedules automatic changes with Android WorkManager. The schedule is stored persistently, continues when the app is closed normally, and WorkManager restores scheduled jobs after device reboots. When the app is opened, it checks whether an active rotation job exists and repairs the schedule if needed.
+The minimum selectable interval is 5 seconds. Once the user starts rotation, Wallpaper Shuttle runs a foreground service with a silent, ongoing notification. For selected intervals of five minutes or less, it also holds a timed partial wake lock and renews it during rotation so the CPU can continue processing changes while the screen is off. This improves short-interval responsiveness but can noticeably increase battery use.
 
-Android may defer background work because of Doze, battery optimisation, app standby, or manufacturer power management. Therefore, short intervals are best-effort and are not exact alarms. The Android Force stop action prevents scheduled background work until the user launches the app again; an app cannot override that system restriction.
+Longer selected intervals release the partial wake lock to let the phone sleep. Android, Doze, battery optimisation, and manufacturer power management can still restrict or stop background activity. Exact five-second timing cannot be guaranteed, and Android's Force stop action disables background work until the user launches the app again.
 
-For more reliable background operation on Infinix/XOS, allow Wallpaper Shuttle's background activity, enable its auto-start option if available, and avoid battery-restricting or power-saving modes. Menu names vary by XOS version.
+The app resumes an enabled rotation after a device restart or app update when Android permits the foreground service to start. For more reliable background operation on Infinix/XOS, allow Wallpaper Shuttle's background activity, enable its auto-start option if available, and avoid restrictive power-saving modes. Menu names vary by XOS version.
 
-The app intentionally does not request notification permission or show routine notifications. It does not use a persistent foreground-service notification.
+The app uses a silent ongoing foreground-service notification while automatic rotation is active. On Android 13 and later, allow notification permission so that the service notification can appear in the notification drawer.
 
 ## Privacy and storage
 
