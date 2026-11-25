@@ -80,22 +80,20 @@ class WallpaperRotationService : Service() {
 
             lastStatus = rotateToRandomImage()
 
-            val nextChangeAt = System.currentTimeMillis() +
-                TimeUnit.SECONDS.toMillis(intervalSeconds.toLong())
-            preferences.edit()
-                .putLong("next_rotation_time", nextChangeAt)
-                .putString("last_rotation_status", lastStatus)
-                .commit()
-
-            updateForegroundNotification(intervalSeconds)
-
             // Count processing time toward the chosen interval. If processing
             // takes longer than the interval, start the next cycle immediately.
             val elapsed = SystemClock.elapsedRealtime() - startedAt
             val remainingDelay = (
                 TimeUnit.SECONDS.toMillis(intervalSeconds.toLong()) - elapsed
             ).coerceAtLeast(0L)
+            val nextChangeAt = System.currentTimeMillis() + remainingDelay
 
+            preferences.edit()
+                .putLong("next_rotation_time", nextChangeAt)
+                .putString("last_rotation_status", lastStatus)
+                .commit()
+
+            updateForegroundNotification(intervalSeconds)
             rotationHandler.postDelayed(this, remainingDelay)
         }
     }
@@ -123,22 +121,6 @@ class WallpaperRotationService : Service() {
                 stopServiceCleanly()
                 return START_NOT_STICKY
             }
-            ACTION_UPDATE_INTERVAL -> {
-                if (!preferences.getBoolean("rotation_enabled", false)) {
-                    stopServiceCleanly()
-                    return START_NOT_STICKY
-                }
-                ensureForeground()
-                rotationHandler.removeCallbacks(rotationTask)
-                val seconds = preferences.getInt("interval_seconds", 5)
-                    .coerceIn(5, 86400)
-                val nextChangeAt = System.currentTimeMillis() +
-                    TimeUnit.SECONDS.toMillis(seconds.toLong())
-                preferences.edit().putLong("next_rotation_time", nextChangeAt).commit()
-                updateForegroundNotification(seconds)
-                rotationHandler.postDelayed(rotationTask, TimeUnit.SECONDS.toMillis(seconds.toLong()))
-                return START_STICKY
-            }
             else -> {
                 if (!preferences.getBoolean("rotation_enabled", false)) {
                     stopServiceCleanly()
@@ -159,7 +141,20 @@ class WallpaperRotationService : Service() {
                 }
 
                 rotationHandler.removeCallbacks(rotationTask)
-                rotationHandler.post(rotationTask)
+                if (intent?.action == ACTION_UPDATE_INTERVAL) {
+                    val seconds = preferences.getInt("interval_seconds", 5)
+                        .coerceIn(5, 86400)
+                    val nextChangeAt = System.currentTimeMillis() +
+                        TimeUnit.SECONDS.toMillis(seconds.toLong())
+                    preferences.edit().putLong("next_rotation_time", nextChangeAt).commit()
+                    updateForegroundNotification(seconds)
+                    rotationHandler.postDelayed(
+                        rotationTask,
+                        TimeUnit.SECONDS.toMillis(seconds.toLong())
+                    )
+                } else {
+                    rotationHandler.post(rotationTask)
+                }
                 return START_STICKY
             }
         }
