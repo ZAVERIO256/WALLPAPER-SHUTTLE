@@ -149,8 +149,8 @@ class WallpaperRotationWorker(
             return
         }
 
-        val intervalSeconds = preferences.getInt("interval_seconds", 10)
-            .coerceIn(10, 86400)
+        val intervalSeconds = preferences.getInt("interval_seconds", 5)
+            .coerceIn(5, 86400)
 
         val nextChangeAt = System.currentTimeMillis() +
             TimeUnit.SECONDS.toMillis(intervalSeconds.toLong())
