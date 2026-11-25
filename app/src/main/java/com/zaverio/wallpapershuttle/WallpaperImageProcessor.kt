@@ -54,9 +54,14 @@ object WallpaperImageProcessor {
             inJustDecodeBounds = true
         }
 
-        context.contentResolver.openInputStream(uri)?.use {
+        val boundsStream = context.contentResolver.openInputStream(uri)
+            ?: throw IllegalStateException("Cannot open the selected image. Re-select the image folder and grant access.")
+
+        // Bounds-only decoding intentionally returns null. Its purpose is to
+        // populate outWidth/outHeight, so do not treat that null as a read error.
+        boundsStream.use {
             BitmapFactory.decodeStream(it, null, bounds)
-        } ?: throw IllegalStateException("Cannot read selected image. Re-select the image folder.")
+        }
 
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
             throw IllegalStateException("This image is invalid or has an unsupported format.")
