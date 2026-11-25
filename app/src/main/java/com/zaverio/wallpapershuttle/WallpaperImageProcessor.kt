@@ -31,34 +31,24 @@ object WallpaperImageProcessor {
             throw IllegalArgumentException("Choose Home, Lock or Both in Settings.")
         }
 
-        val desiredWidth = manager.desiredMinimumWidth
-            .takeIf { it > 0 } ?: metrics.widthPixels
+        val screenWidth = metrics.widthPixels.coerceAtLeast(1)
+        val screenHeight = metrics.heightPixels.coerceAtLeast(1)
 
-        val desiredHeight = manager.desiredMinimumHeight
-            .takeIf { it > 0 } ?: metrics.heightPixels
+        val lockWidth = manager.desiredMinimumWidth
+            .takeIf { it > 0 } ?: screenWidth
+        val lockHeight = manager.desiredMinimumHeight
+            .takeIf { it > 0 } ?: screenHeight
 
-        val dimensionScale = min(
-            1f,
-            min(
-                4096f / max(desiredWidth, desiredHeight),
-                sqrt(8_000_000f / (desiredWidth.toFloat() * desiredHeight))
-            )
-        )
-
-        val outputWidth = (desiredWidth * dimensionScale)
-            .toInt().coerceAtLeast(1)
-        val outputHeight = (desiredHeight * dimensionScale)
-            .toInt().coerceAtLeast(1)
-
+        // Read source bounds first. A null bitmap is expected for inJustDecodeBounds.
         val bounds = BitmapFactory.Options().apply {
             inJustDecodeBounds = true
         }
 
         val boundsStream = context.contentResolver.openInputStream(uri)
-            ?: throw IllegalStateException("Cannot open the selected image. Re-select the image folder and grant access.")
+            ?: throw IllegalStateException(
+                "Cannot open the selected image. Re-select the image folder and grant access."
+            )
 
-        // Bounds-only decoding intentionally returns null. Its purpose is to
-        // populate outWidth/outHeight, so do not treat that null as a read error.
         boundsStream.use {
             BitmapFactory.decodeStream(it, null, bounds)
         }
@@ -67,6 +57,7 @@ object WallpaperImageProcessor {
             throw IllegalStateException("This image is invalid or has an unsupported format.")
         }
 
+        // Decode a memory-conscious source bitmap once, then prepare each screen separately.
         var sampleSize = 1
         val sourcePixels = bounds.outWidth.toLong() * bounds.outHeight
         while (sourcePixels / ((sampleSize * 2L) * (sampleSize * 2L)) > 12_000_000L) {
@@ -80,44 +71,68 @@ object WallpaperImageProcessor {
 
         val source = context.contentResolver.openInputStream(uri)?.use {
             BitmapFactory.decodeStream(it, null, options)
-        } ?: throw IllegalStateException("Image decoding failed. Try another picture.")
-
-        val output = Bitmap.createBitmap(
-            outputWidth,
-            outputHeight,
-            Bitmap.Config.ARGB_8888
+        } ?: throw IllegalStateException(
+            "Image decoding failed. Try selecting another picture."
         )
 
+        if (source.width <= 0 || source.height <= 0) {
+            source.recycle()
+            throw IllegalStateException("The selected image could not be decoded.")
+        }
+
+        fun createScreenBitmap(targetWidth: Int, targetHeight: Int): Bitmap {
+            // Cap the output size to avoid excessive memory use on large screens.
+            val scaleLimit = min(
+                1f,
+                min(
+                    4096f / max(targetWidth, targetHeight),
+                    sqrt(8_000_000f / (targetWidth.toFloat() * targetHeight))
+                )
+            )
+            val outputWidth = (targetWidth * scaleLimit).toInt().coerceAtLeast(1)
+            val outputHeight = (targetHeight * scaleLimit).toInt().coerceAtLeast(1)
+
+            val output = Bitmap.createBitmap(
+                outputWidth,
+                outputHeight,
+                Bitmap.Config.ARGB_8888
+            )
+
+            try {
+                val canvas = Canvas(output)
+                canvas.drawColor(Color.BLACK)
+
+                val sourceWidth = source.width.toFloat()
+                val sourceHeight = source.height.toFloat()
+                val scaleX = outputWidth / sourceWidth
+                val scaleY = outputHeight / sourceHeight
+
+                val scale = when (mode.lowercase()) {
+                    "fit" -> min(scaleX, scaleY)
+                    "stretch" -> null
+                    else -> max(scaleX, scaleY)
+                }
+
+                val destinationRect = if (mode.equals("stretch", true)) {
+                    RectF(0f, 0f, outputWidth.toFloat(), outputHeight.toFloat())
+                } else {
+                    val width = sourceWidth * scale!!
+                    val height = sourceHeight * scale
+                    val left = (outputWidth - width) / 2f
+                    val top = (outputHeight - height) / 2f
+                    RectF(left, top, left + width, top + height)
+                }
+
+                val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG)
+                canvas.drawBitmap(source, null, destinationRect, paint)
+                return output
+            } catch (e: Exception) {
+                output.recycle()
+                throw e
+            }
+        }
+
         try {
-            val canvas = Canvas(output)
-            canvas.drawColor(Color.BLACK)
-
-            val sourceWidth = source.width.toFloat()
-            val sourceHeight = source.height.toFloat()
-            val scaleX = outputWidth / sourceWidth
-            val scaleY = outputHeight / sourceHeight
-
-            val scale = when (mode.lowercase()) {
-                "fit" -> min(scaleX, scaleY)
-                "stretch" -> null
-                else -> max(scaleX, scaleY)
-            }
-
-            val destinationRect = if (mode.equals("stretch", true)) {
-                RectF(0f, 0f, outputWidth.toFloat(), outputHeight.toFloat())
-            } else {
-                val width = sourceWidth * scale!!
-                val height = sourceHeight * scale
-                val left = (outputWidth - width) / 2f
-                val top = (outputHeight - height) / 2f
-                RectF(left, top, left + width, top + height)
-            }
-
-            val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG)
-            canvas.drawBitmap(source, null, destinationRect, paint)
-
-            // Apply each screen individually on Both for clearer device compatibility
-            // and report success only when Android returns a non-zero wallpaper ID.
             val homeRequested = requested and WallpaperManager.FLAG_SYSTEM != 0
             val lockRequested = requested and WallpaperManager.FLAG_LOCK != 0
 
@@ -127,22 +142,31 @@ object WallpaperImageProcessor {
             var lockError: Exception? = null
 
             if (homeRequested) {
+                val homeBitmap = createScreenBitmap(screenWidth, screenHeight)
                 try {
+                    // Use the physical display size for Home so multi-page launchers
+                    // have no extra-wide image to pan across their workspace.
                     homeId = manager.setBitmap(
-                        output, null, true, WallpaperManager.FLAG_SYSTEM
+                        homeBitmap, null, true, WallpaperManager.FLAG_SYSTEM
                     )
                 } catch (e: Exception) {
                     homeError = e
+                } finally {
+                    homeBitmap.recycle()
                 }
             }
 
             if (lockRequested) {
+                val lockBitmap = createScreenBitmap(lockWidth, lockHeight)
                 try {
+                    // Preserve the device's preferred wallpaper dimensions for Lock.
                     lockId = manager.setBitmap(
-                        output, null, true, WallpaperManager.FLAG_LOCK
+                        lockBitmap, null, true, WallpaperManager.FLAG_LOCK
                     )
                 } catch (e: Exception) {
                     lockError = e
+                } finally {
+                    lockBitmap.recycle()
                 }
             }
 
@@ -158,22 +182,24 @@ object WallpaperImageProcessor {
                         add("Lock screen: " + (lockError?.message ?: "Android returned wallpaper ID 0"))
                     }
                 }.joinToString("; ")
+
                 val succeeded = buildList {
                     if (homeRequested && homeSucceeded) add("Home")
                     if (lockRequested && lockSucceeded) add("Lock")
                 }
+
                 val prefix = if (succeeded.isEmpty()) {
                     "Android did not apply the wallpaper."
                 } else {
                     "Wallpaper changed on ${succeeded.joinToString()} only."
                 }
+
                 throw IOException("$prefix $detail")
             }
 
             return if (lockRequested) lockId else homeId
         } finally {
             source.recycle()
-            output.recycle()
         }
     }
 }
