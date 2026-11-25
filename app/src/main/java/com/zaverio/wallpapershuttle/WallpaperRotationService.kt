@@ -72,6 +72,7 @@ class WallpaperRotationService : Service() {
     private var cachedFolderUri: String? = null
     private var lastImageScanAt = 0L
     private var loopScheduled = false
+    private var loopGeneration = 0
     private var lastStatus: String = "Rotation is active"
 
     private val rotationTask = object : Runnable {
@@ -85,9 +86,14 @@ class WallpaperRotationService : Service() {
                 .getInt("interval_seconds", 5)
                 .coerceIn(5, 86400)
             maintainWakeLock(intervalSeconds)
+            val generationAtStart = loopGeneration
             val startedAt = SystemClock.elapsedRealtime()
 
             lastStatus = rotateToRandomImage()
+
+            // An interval update or pause may have happened while the image
+            // was being prepared. Do not let the old run schedule another loop.
+            if (generationAtStart != loopGeneration) return
 
             // Count processing time toward the chosen interval. If processing
             // takes longer than the interval, start the next cycle immediately.
@@ -152,6 +158,7 @@ class WallpaperRotationService : Service() {
 
                 when (intent?.action) {
                     ACTION_UPDATE_INTERVAL -> {
+                        loopGeneration++
                         rotationHandler.removeCallbacks(rotationTask)
                         val seconds = preferences.getInt("interval_seconds", 5)
                             .coerceIn(5, 86400)
@@ -170,11 +177,13 @@ class WallpaperRotationService : Service() {
                         // Reopening the app should repair a missing service without
                         // restarting an already-running countdown.
                         if (!loopScheduled) {
+                            loopGeneration++
                             loopScheduled = true
                             rotationHandler.post(rotationTask)
                         }
                     }
                     else -> {
+                        loopGeneration++
                         rotationHandler.removeCallbacks(rotationTask)
                         loopScheduled = true
                         rotationHandler.post(rotationTask)
@@ -375,6 +384,7 @@ class WallpaperRotationService : Service() {
     }
 
     private fun stopServiceCleanly() {
+        loopGeneration++
         loopScheduled = false
         rotationHandler.removeCallbacks(rotationTask)
         preferences.edit()
@@ -401,6 +411,7 @@ class WallpaperRotationService : Service() {
     }
 
     override fun onDestroy() {
+        loopGeneration++
         loopScheduled = false
         rotationHandler.removeCallbacksAndMessages(null)
         if (wakeLock?.isHeld == true) {
