@@ -124,7 +124,7 @@ class WallpaperRotationWorker(
             preferences.edit()
                 .putString("last_image_uri", chosenImage.toString())
                 .putLong("last_rotation_time", System.currentTimeMillis())
-                .apply()
+                .commit()
 
             AppStorage.addHistory(applicationContext, chosenImage)
 
@@ -135,7 +135,7 @@ class WallpaperRotationWorker(
 
         preferences.edit()
             .putString("last_rotation_status", status)
-            .apply()
+            .commit()
 
         scheduleNextRotation(preferences)
 
@@ -157,7 +157,7 @@ class WallpaperRotationWorker(
 
         preferences.edit()
             .putLong("next_rotation_time", nextChangeAt)
-            .apply()
+            .commit()
 
         val nextWork = OneTimeWorkRequestBuilder<WallpaperRotationWorker>()
             .setInitialDelay(intervalSeconds.toLong(), TimeUnit.SECONDS)
