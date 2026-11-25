@@ -111,8 +111,8 @@ class WallpaperRotationWorker(
 
             val displayMode = preferences.getString(
                 "display_mode",
-                "fit"
-            ) ?: "fit"
+                "crop"
+            ) ?: "crop"
 
             WallpaperImageProcessor.apply(
                 applicationContext,
