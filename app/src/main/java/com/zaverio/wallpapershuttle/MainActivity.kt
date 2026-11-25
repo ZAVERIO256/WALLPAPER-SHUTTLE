@@ -41,6 +41,22 @@ private val DarkBackground = Color(0xFF101522)
 private val CardBackground = Color(0xFF1C2638)
 private val Accent = Color(0xFF7C9CFF)
 
+private fun formatRotationInterval(totalSeconds: Int): String {
+    val seconds = totalSeconds.coerceIn(10, 86400)
+    return when {
+        seconds < 60 -> "$seconds seconds"
+        seconds % 3600 == 0 -> {
+            val hours = seconds / 3600
+            if (hours == 1) "1 hour" else "$hours hours"
+        }
+        seconds % 60 == 0 -> {
+            val minutes = seconds / 60
+            if (minutes == 1) "1 minute" else "$minutes minutes"
+        }
+        else -> "$seconds seconds"
+    }
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -124,9 +140,12 @@ fun WallpaperShuttleApp(context: Context) {
         mutableStateOf(preferences.getBoolean("rotation_enabled", false))
     }
 
-    var interval by remember {
-        mutableIntStateOf(preferences.getInt("interval", 30))
+    var intervalSeconds by remember {
+        mutableIntStateOf(
+            preferences.getInt("interval_seconds", 10).coerceIn(10, 86400)
+        )
     }
+    var intervalMenuExpanded by remember { mutableStateOf(false) }
 
     var destination by remember {
         mutableIntStateOf(
@@ -216,8 +235,8 @@ fun WallpaperShuttleApp(context: Context) {
         selectedFolder?.let { scanFolder(it) }
     }
 
-    LaunchedEffect(interval) {
-        preferences.edit().putInt("interval", interval).apply()
+    LaunchedEffect(intervalSeconds) {
+        preferences.edit().putInt("interval_seconds", intervalSeconds).apply()
     }
 
     val folderPicker = rememberLauncherForActivityResult(
@@ -418,7 +437,7 @@ fun WallpaperShuttleApp(context: Context) {
                             )
 
                             Text(
-                                "Change interval: $interval minutes",
+                                "Change interval: ${formatRotationInterval(intervalSeconds)}",
                                 color = Color.LightGray
                             )
 
@@ -986,26 +1005,52 @@ fun WallpaperShuttleApp(context: Context) {
                         )
 
                         Text(
-                            "$interval minutes",
+                            formatRotationInterval(intervalSeconds),
                             color = Color.White,
                             fontSize = 25.sp,
                             fontWeight = FontWeight.Bold
                         )
 
-                        Slider(
-                            value = interval.toFloat(),
-                            onValueChange = {
-                                interval = it.toInt().coerceIn(1, 1440)
-                            },
-                            valueRange = 1f..1440f,
-                            colors = SliderDefaults.colors(
-                                thumbColor = Accent,
-                                activeTrackColor = Accent
-                            )
-                        )
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            OutlinedButton(
+                                onClick = { intervalMenuExpanded = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("CHANGE INTERVAL  •  ${formatRotationInterval(intervalSeconds)}")
+                            }
+
+                            DropdownMenu(
+                                expanded = intervalMenuExpanded,
+                                onDismissRequest = { intervalMenuExpanded = false },
+                                modifier = Modifier.heightIn(max = 420.dp)
+                            ) {
+                                listOf(
+                                    10, 20, 30, 40, 50,
+                                    60, 120, 180, 300, 600, 900, 1800,
+                                    3600, 7200, 21600, 43200, 86400
+                                ).forEach { seconds ->
+                                    DropdownMenuItem(
+                                        text = { Text(formatRotationInterval(seconds)) },
+                                        onClick = {
+                                            intervalSeconds = seconds
+                                            intervalMenuExpanded = false
+                                        },
+                                        trailingIcon = {
+                                            if (intervalSeconds == seconds) {
+                                                Icon(
+                                                    imageVector = androidx.compose.material.icons.Icons.Default.Check,
+                                                    contentDescription = "Selected interval",
+                                                    tint = Accent
+                                                )
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
 
                         Text(
-                            "Choose between 1 minute and 24 hours.",
+                            "Choose from 10 seconds up to 24 hours. Android may delay background changes to save battery.",
                             color = Color.LightGray,
                             fontSize = 12.sp
                         )
@@ -1102,8 +1147,8 @@ fun WallpaperShuttleApp(context: Context) {
                                     Text("Designed for local use", color = Color.LightGray, fontSize = 10.sp)
                                 }
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("1–1440", color = Accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                    Text("Minutes interval", color = Color.LightGray, fontSize = 10.sp)
+                                    Text("10s–24h", color = Accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    Text("Rotation interval", color = Color.LightGray, fontSize = 10.sp)
                                 }
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text("3 MODES", color = Accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
