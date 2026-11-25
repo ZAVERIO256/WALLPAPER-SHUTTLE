@@ -57,10 +57,81 @@ private fun formatRotationInterval(totalSeconds: Int): String {
     }
 }
 
+private fun restoreActiveRotationIfNeeded(context: Context) {
+    val appContext = context.applicationContext
+    val preferences = appContext.getSharedPreferences(
+        "shuffle_wallpaper",
+        Context.MODE_PRIVATE
+    )
+
+    if (!preferences.getBoolean("rotation_enabled", false)) return
+
+    // Check WorkManager off the main thread. Repair the schedule if no queued
+    // or running rotation exists (for example, after the app is opened again).
+    val recoveryExecutor = Executors.newSingleThreadExecutor()
+    recoveryExecutor.execute {
+        try {
+            val workManager = WorkManager.getInstance(appContext)
+            val existingWork = workManager
+                .getWorkInfosForUniqueWork(WallpaperRotationWorker.WORK_NAME)
+                .get()
+
+            val hasActiveWork = existingWork.any { info ->
+                info.state == androidx.work.WorkInfo.State.ENQUEUED ||
+                    info.state == androidx.work.WorkInfo.State.RUNNING ||
+                    info.state == androidx.work.WorkInfo.State.BLOCKED
+            }
+
+            if (!hasActiveWork &&
+                preferences.getBoolean("rotation_enabled", false)
+            ) {
+                val nextRotationAt = preferences.getLong("next_rotation_time", 0L)
+                val delayMillis = if (nextRotationAt > 0L) {
+                    (nextRotationAt - System.currentTimeMillis()).coerceAtLeast(0L)
+                } else {
+                    0L
+                }
+
+                preferences.edit()
+                    .putLong(
+                        "next_rotation_time",
+                        System.currentTimeMillis() + delayMillis
+                    )
+                    .commit()
+
+                val recoveryRequest =
+                    OneTimeWorkRequestBuilder<WallpaperRotationWorker>()
+                        .setInitialDelay(
+                            delayMillis,
+                            java.util.concurrent.TimeUnit.MILLISECONDS
+                        )
+                        .addTag(WallpaperRotationWorker.WORK_NAME)
+                        .build()
+
+                workManager.enqueueUniqueWork(
+                    WallpaperRotationWorker.WORK_NAME,
+                    ExistingWorkPolicy.KEEP,
+                    recoveryRequest
+                )
+            }
+        } catch (error: Exception) {
+            preferences.edit()
+                .putString(
+                    "last_rotation_status",
+                    "Background schedule check failed: ${error.message ?: "unknown error"}"
+                )
+                .commit()
+        } finally {
+            recoveryExecutor.shutdown()
+        }
+    }
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        restoreActiveRotationIfNeeded(applicationContext)
         setContent {
             WallpaperShuttleApp(this)
         }
@@ -244,7 +315,7 @@ fun WallpaperShuttleApp(context: Context) {
     }
 
     LaunchedEffect(intervalSeconds) {
-        preferences.edit().putInt("interval_seconds", intervalSeconds).apply()
+        preferences.edit().putInt("interval_seconds", intervalSeconds).commit()
     }
 
     val folderPicker = rememberLauncherForActivityResult(
@@ -291,7 +362,7 @@ fun WallpaperShuttleApp(context: Context) {
         preferences.edit()
             .putBoolean("rotation_enabled", true)
             .putLong("next_rotation_time", System.currentTimeMillis())
-            .apply()
+            .commit()
 
         rotationRunning = true
         statusMessage = "Automatic wallpaper rotation started."
@@ -311,7 +382,7 @@ fun WallpaperShuttleApp(context: Context) {
         preferences.edit()
             .putBoolean("rotation_enabled", false)
             .remove("next_rotation_time")
-            .apply()
+            .commit()
 
         WorkManager.getInstance(context).cancelUniqueWork(
             WallpaperRotationWorker.WORK_NAME
@@ -1051,7 +1122,7 @@ fun WallpaperShuttleApp(context: Context) {
                                                 preferences.edit()
                                                     .putInt("interval_seconds", seconds)
                                                     .putLong("next_rotation_time", nextChangeAt)
-                                                    .apply()
+                                                    .commit()
 
                                                 val nextRequest =
                                                     OneTimeWorkRequestBuilder<WallpaperRotationWorker>()
@@ -1257,7 +1328,7 @@ fun WallpaperShuttleApp(context: Context) {
                             HorizontalDivider(color = Color(0xFF344055))
                             Text("DISPLAY MODES", color = Accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             Text("Crop fills the display edge-to-edge while preserving proportions, trimming excess edges when needed. Fit shows the entire original image but can leave black space. Stretch fills the display but may distort the picture.", color = Color.LightGray, fontSize = 12.sp, lineHeight = 19.sp)
-                            Text("Note: Android may delay background wallpaper changes to manage battery use. Rotation timing is therefore not guaranteed to be exact.", color = Color(0xFFB7C8FF), fontSize = 11.sp, lineHeight = 17.sp)
+                            Text("Background rotation is scheduled with Android WorkManager and can continue when you close the app normally. Android restores scheduled work after a device restart. Do not use Force stop; allow background activity and remove battery restrictions for the most reliable operation. The system can still delay changes to manage battery use.", color = Color(0xFFB7C8FF), fontSize = 11.sp, lineHeight = 17.sp)
                         }
                     }
 
