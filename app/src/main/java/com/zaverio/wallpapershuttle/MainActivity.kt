@@ -1,14 +1,18 @@
 package com.zaverio.wallpapershuttle
 
+import android.Manifest
 import android.app.WallpaperManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.content.ContextCompat
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -30,9 +34,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.documentfile.provider.DocumentFile
-import androidx.work.ExistingWorkPolicy
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
 import coil.compose.AsyncImage
 import java.util.concurrent.Executors
 import kotlinx.coroutines.delay
@@ -57,73 +58,23 @@ private fun formatRotationInterval(totalSeconds: Int): String {
     }
 }
 
-private fun restoreActiveRotationIfNeeded(context: Context) {
-    val appContext = context.applicationContext
-    val preferences = appContext.getSharedPreferences(
+private fun ensureActiveRotationService(context: Context) {
+    val preferences = context.getSharedPreferences(
         "shuffle_wallpaper",
         Context.MODE_PRIVATE
     )
-
     if (!preferences.getBoolean("rotation_enabled", false)) return
 
-    // Check WorkManager off the main thread. Repair the schedule if no queued
-    // or running rotation exists (for example, after the app is opened again).
-    val recoveryExecutor = Executors.newSingleThreadExecutor()
-    recoveryExecutor.execute {
-        try {
-            val workManager = WorkManager.getInstance(appContext)
-            val existingWork = workManager
-                .getWorkInfosForUniqueWork(WallpaperRotationWorker.WORK_NAME)
-                .get()
-
-            val hasActiveWork = existingWork.any { info ->
-                info.state == androidx.work.WorkInfo.State.ENQUEUED ||
-                    info.state == androidx.work.WorkInfo.State.RUNNING ||
-                    info.state == androidx.work.WorkInfo.State.BLOCKED
-            }
-
-            if (!hasActiveWork &&
-                preferences.getBoolean("rotation_enabled", false)
-            ) {
-                val nextRotationAt = preferences.getLong("next_rotation_time", 0L)
-                val delayMillis = if (nextRotationAt > 0L) {
-                    (nextRotationAt - System.currentTimeMillis()).coerceAtLeast(0L)
-                } else {
-                    0L
-                }
-
-                preferences.edit()
-                    .putLong(
-                        "next_rotation_time",
-                        System.currentTimeMillis() + delayMillis
-                    )
-                    .commit()
-
-                val recoveryRequest =
-                    OneTimeWorkRequestBuilder<WallpaperRotationWorker>()
-                        .setInitialDelay(
-                            delayMillis,
-                            java.util.concurrent.TimeUnit.MILLISECONDS
-                        )
-                        .addTag(WallpaperRotationWorker.WORK_NAME)
-                        .build()
-
-                workManager.enqueueUniqueWork(
-                    WallpaperRotationWorker.WORK_NAME,
-                    ExistingWorkPolicy.KEEP,
-                    recoveryRequest
-                )
-            }
-        } catch (error: Exception) {
-            preferences.edit()
-                .putString(
-                    "last_rotation_status",
-                    "Background schedule check failed: ${error.message ?: "unknown error"}"
-                )
-                .commit()
-        } finally {
-            recoveryExecutor.shutdown()
-        }
+    try {
+        WallpaperRotationService.start(context.applicationContext)
+    } catch (error: Exception) {
+        preferences.edit()
+            .putBoolean("foreground_rotation_service", false)
+            .putString(
+                "last_rotation_status",
+                "Could not resume continuous rotation: ${error.message ?: "unknown error"}"
+            )
+            .commit()
     }
 }
 
@@ -131,7 +82,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
-        restoreActiveRotationIfNeeded(applicationContext)
+        ensureActiveRotationService(applicationContext)
         setContent {
             WallpaperShuttleApp(this)
         }
@@ -270,6 +221,23 @@ fun WallpaperShuttleApp(context: Context) {
     }
 
 
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        try {
+            WallpaperRotationService.start(context)
+            if (!granted) {
+                statusMessage =
+                    "Rotation is active. Android may show its service indicator in system task manager instead of the notification drawer."
+            }
+        } catch (error: Exception) {
+            preferences.edit().putBoolean("rotation_enabled", false)
+                .putBoolean("foreground_rotation_service", false).commit()
+            rotationRunning = false
+            statusMessage = "Could not start continuous rotation: ${error.message}"
+        }
+    }
+
     val executor = remember { Executors.newSingleThreadExecutor() }
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
 
@@ -361,32 +329,42 @@ fun WallpaperShuttleApp(context: Context) {
 
         preferences.edit()
             .putBoolean("rotation_enabled", true)
+            .putBoolean("foreground_rotation_service", true)
             .putLong("next_rotation_time", System.currentTimeMillis())
             .commit()
 
         rotationRunning = true
-        statusMessage = "Automatic wallpaper rotation started."
+        statusMessage = "Continuous automatic wallpaper rotation started."
 
-        val request = OneTimeWorkRequestBuilder<WallpaperRotationWorker>()
-            .addTag(WallpaperRotationWorker.WORK_NAME)
-            .build()
-
-        WorkManager.getInstance(context).enqueueUniqueWork(
-            WallpaperRotationWorker.WORK_NAME,
-            ExistingWorkPolicy.REPLACE,
-            request
-        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            try {
+                WallpaperRotationService.start(context)
+            } catch (error: Exception) {
+                preferences.edit()
+                    .putBoolean("rotation_enabled", false)
+                    .putBoolean("foreground_rotation_service", false)
+                    .commit()
+                rotationRunning = false
+                statusMessage = "Could not start continuous rotation: ${error.message}"
+            }
+        }
     }
 
     fun pauseRotation() {
         preferences.edit()
             .putBoolean("rotation_enabled", false)
+            .putBoolean("foreground_rotation_service", false)
             .remove("next_rotation_time")
             .commit()
 
-        WorkManager.getInstance(context).cancelUniqueWork(
-            WallpaperRotationWorker.WORK_NAME
-        )
+        WallpaperRotationService.stop(context)
 
         rotationRunning = false
         statusMessage = "Automatic rotation paused."
@@ -1124,20 +1102,15 @@ fun WallpaperShuttleApp(context: Context) {
                                                     .putLong("next_rotation_time", nextChangeAt)
                                                     .commit()
 
-                                                val nextRequest =
-                                                    OneTimeWorkRequestBuilder<WallpaperRotationWorker>()
-                                                        .setInitialDelay(
-                                                            seconds.toLong(),
-                                                            java.util.concurrent.TimeUnit.SECONDS
-                                                        )
-                                                        .addTag(WallpaperRotationWorker.WORK_NAME)
-                                                        .build()
-
-                                                WorkManager.getInstance(context).enqueueUniqueWork(
-                                                    WallpaperRotationWorker.WORK_NAME,
-                                                    ExistingWorkPolicy.REPLACE,
-                                                    nextRequest
-                                                )
+                                                try {
+                                                    WallpaperRotationService.start(
+                                                        context,
+                                                        WallpaperRotationService.ACTION_UPDATE_INTERVAL
+                                                    )
+                                                } catch (error: Exception) {
+                                                    statusMessage =
+                                                        "Could not update the active rotation timer: ${error.message}"
+                                                }
                                             }
                                         },
                                         trailingIcon = {
