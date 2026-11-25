@@ -149,18 +149,18 @@ class WallpaperRotationWorker(
             return
         }
 
-        val interval = preferences.getInt("interval", 30)
-            .coerceIn(1, 1440)
+        val intervalSeconds = preferences.getInt("interval_seconds", 10)
+            .coerceIn(10, 86400)
 
         val nextChangeAt = System.currentTimeMillis() +
-            TimeUnit.MINUTES.toMillis(interval.toLong())
+            TimeUnit.SECONDS.toMillis(intervalSeconds.toLong())
 
         preferences.edit()
             .putLong("next_rotation_time", nextChangeAt)
             .apply()
 
         val nextWork = OneTimeWorkRequestBuilder<WallpaperRotationWorker>()
-            .setInitialDelay(interval.toLong(), TimeUnit.MINUTES)
+            .setInitialDelay(intervalSeconds.toLong(), TimeUnit.SECONDS)
             .addTag(WORK_NAME)
             .build()
 
