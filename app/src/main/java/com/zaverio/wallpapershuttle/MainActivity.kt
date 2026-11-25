@@ -1372,7 +1372,7 @@ fun WallpaperShuttleApp(context: Context) {
                             HorizontalDivider(color = Color(0xFF344055))
                             Text("DISPLAY MODES", color = Accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             Text("Crop fills the display edge-to-edge while preserving proportions, trimming excess edges when needed. Fit shows the entire original image but can leave black space. Stretch fills the display but may distort the picture.", color = Color.LightGray, fontSize = 12.sp, lineHeight = 19.sp)
-                            Text("Automatic rotation uses an ongoing silent notification and a foreground service. For intervals up to 5 minutes, the app keeps the CPU awake so changes can happen while the screen is off. This can noticeably increase battery use. Android and Infinix XOS can still stop background activity under strict power restrictions. Force stop always disables it until you open the app again.", color = Color(0xFFB7C8FF), fontSize = 11.sp, lineHeight = 17.sp)
+                            Text("Automatic rotation uses an ongoing silent notification and a foreground service. A service watchdog checks for missed rotation cycles and attempts recovery. For intervals up to 5 minutes, the app keeps the CPU awake so changes can happen while the screen is off. This can noticeably increase battery use. Android and Infinix XOS can still stop background activity under strict power restrictions. Allow battery optimisation exemption, enable XOS Auto-start and lock the app in Recent Apps. Force stop always disables it until you open the app again.", color = Color(0xFFB7C8FF), fontSize = 11.sp, lineHeight = 17.sp)
                         }
                     }
 
@@ -1394,7 +1394,7 @@ fun WallpaperShuttleApp(context: Context) {
                             Text("kdavidtyra@gmail.com", color = Color.White, fontSize = 13.sp)
                             Text("+256 701 303 855", color = Color.White, fontSize = 13.sp)
                             Text("App: Wallpaper Shuttle", color = Color.LightGray, fontSize = 11.sp)
-                            Text("Version 1.4", color = Color.LightGray, fontSize = 11.sp)
+                            Text("Version 1.5", color = Color.LightGray, fontSize = 11.sp)
                         }
                     }
 
