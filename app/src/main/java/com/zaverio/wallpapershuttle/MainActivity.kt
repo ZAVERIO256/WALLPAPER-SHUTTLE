@@ -930,7 +930,7 @@ fun WallpaperShuttleApp(context: Context) {
                                         .putString("display_mode", displayMode)
                                         .apply()
                                 },
-                                label = { Text("Fill Screen") }
+                                label = { Text("Crop") }
                             )
 
                             FilterChip(
