@@ -137,9 +137,18 @@ fun WallpaperShuttleApp(context: Context) {
         )
     }
 
+    // One-time migration: make Fit the default so complete images are shown
+    // on both screens without cropping or launcher-style zoom.
+    if (preferences.getInt("fit_mode_default_migration", 0) < 1) {
+        preferences.edit()
+            .putString("display_mode", "fit")
+            .putInt("fit_mode_default_migration", 1)
+            .apply()
+    }
+
     var displayMode by remember {
         mutableStateOf(
-            preferences.getString("display_mode", "crop") ?: "crop"
+            preferences.getString("display_mode", "fit") ?: "fit"
         )
     }
 
@@ -293,8 +302,8 @@ fun WallpaperShuttleApp(context: Context) {
             val result = try {
                 val displayMode = preferences.getString(
                     "display_mode",
-                    "crop"
-                ) ?: "crop"
+                    "fit"
+                ) ?: "fit"
 
                 val wallpaperId = WallpaperImageProcessor.apply(
                     context,
