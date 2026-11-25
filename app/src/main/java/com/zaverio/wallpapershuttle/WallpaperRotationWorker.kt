@@ -109,18 +109,17 @@ class WallpaperRotationWorker(
                 WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK
             )
 
-            val stream = applicationContext.contentResolver
-                .openInputStream(chosenImage)
-                ?: throw IllegalStateException("Cannot open selected image.")
+            val displayMode = preferences.getString(
+                "display_mode",
+                "crop"
+            ) ?: "crop"
 
-            stream.use {
-                WallpaperManager.getInstance(applicationContext).setStream(
-                    it,
-                    null,
-                    true,
-                    destination
-                )
-            }
+            WallpaperImageProcessor.apply(
+                applicationContext,
+                chosenImage,
+                displayMode,
+                destination
+            )
 
             preferences.edit()
                 .putString("last_image_uri", chosenImage.toString())
@@ -152,6 +151,13 @@ class WallpaperRotationWorker(
 
         val interval = preferences.getInt("interval", 30)
             .coerceIn(1, 1440)
+
+        val nextChangeAt = System.currentTimeMillis() +
+            TimeUnit.MINUTES.toMillis(interval.toLong())
+
+        preferences.edit()
+            .putLong("next_rotation_time", nextChangeAt)
+            .apply()
 
         val nextWork = OneTimeWorkRequestBuilder<WallpaperRotationWorker>()
             .setInitialDelay(interval.toLong(), TimeUnit.MINUTES)

@@ -14,6 +14,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,6 +35,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import coil.compose.AsyncImage
 import java.util.concurrent.Executors
+import kotlinx.coroutines.delay
 
 private val DarkBackground = Color(0xFF101522)
 private val CardBackground = Color(0xFF1C2638)
@@ -134,6 +137,12 @@ fun WallpaperShuttleApp(context: Context) {
         )
     }
 
+    var displayMode by remember {
+        mutableStateOf(
+            preferences.getString("display_mode", "crop") ?: "crop"
+        )
+    }
+
     var statusMessage by remember {
         mutableStateOf(
             preferences.getString("last_rotation_status", null)
@@ -141,6 +150,18 @@ fun WallpaperShuttleApp(context: Context) {
     }
 
     var selectedTab by remember { mutableIntStateOf(0) }
+
+    var clockNow by remember {
+        mutableLongStateOf(System.currentTimeMillis())
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            clockNow = System.currentTimeMillis()
+            delay(1000L)
+        }
+    }
+
 
     val executor = remember { Executors.newSingleThreadExecutor() }
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
@@ -233,6 +254,7 @@ fun WallpaperShuttleApp(context: Context) {
 
         preferences.edit()
             .putBoolean("rotation_enabled", true)
+            .putLong("next_rotation_time", System.currentTimeMillis())
             .apply()
 
         rotationRunning = true
@@ -252,6 +274,7 @@ fun WallpaperShuttleApp(context: Context) {
     fun pauseRotation() {
         preferences.edit()
             .putBoolean("rotation_enabled", false)
+            .remove("next_rotation_time")
             .apply()
 
         WorkManager.getInstance(context).cancelUniqueWork(
@@ -268,19 +291,22 @@ fun WallpaperShuttleApp(context: Context) {
 
         executor.execute {
             val result = try {
-                val stream = context.contentResolver.openInputStream(uri)
-                    ?: throw IllegalStateException("Cannot open selected image.")
+                val displayMode = preferences.getString(
+                    "display_mode",
+                    "crop"
+                ) ?: "crop"
 
-                stream.use {
-                    WallpaperManager.getInstance(context).setStream(
-                        it,
-                        null,
-                        true,
-                        destination
-                    )
-                }
+                WallpaperImageProcessor.apply(
+                    context,
+                    uri,
+                    displayMode,
+                    destination
+                )
 
                 AppStorage.addHistory(context, uri)
+                preferences.edit()
+                    .putLong("last_rotation_time", System.currentTimeMillis())
+                    .apply()
                 historyEntries = AppStorage.getHistory(context)
                 "Wallpaper applied successfully."
             } catch (e: Exception) {
@@ -322,6 +348,23 @@ fun WallpaperShuttleApp(context: Context) {
 
 
                 if (selectedTab == 0) {
+                    val nextRotationAt = preferences.getLong(
+                        "next_rotation_time", 0L
+                    )
+                    val remainingSeconds =
+                        ((nextRotationAt - clockNow).coerceAtLeast(0L)) / 1000L
+                    val hoursLeft = remainingSeconds / 3600L
+                    val minutesLeft = (remainingSeconds % 3600L) / 60L
+                    val secondsLeft = remainingSeconds % 60L
+
+                    val countdownText = if (hoursLeft > 0) {
+                        "%02d:%02d:%02d".format(
+                            hoursLeft, minutesLeft, secondsLeft
+                        )
+                    } else {
+                        "%02d:%02d".format(minutesLeft, secondsLeft)
+                    }
+
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
@@ -364,6 +407,47 @@ fun WallpaperShuttleApp(context: Context) {
                                 "Change interval: $interval minutes",
                                 color = Color.LightGray
                             )
+
+                            Text(
+                                "NEXT WALLPAPER CHANGE",
+                                color = Accent,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Text(
+                                when {
+                                    !rotationRunning -> "Paused"
+                                    nextRotationAt <= 0L -> "Starting first rotation..."
+                                    remainingSeconds == 0L ->
+                                        "Due — waiting for Android"
+                                    else -> countdownText
+                                },
+                                color = Color.White,
+                                fontSize = 27.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Text(
+                                "Android may delay background changes to save battery.",
+                                color = Color.LightGray,
+                                fontSize = 11.sp
+                            )
+
+                            val lastChangedAt = preferences.getLong(
+                                "last_rotation_time", 0L
+                            )
+
+                            if (lastChangedAt > 0L) {
+                                Text(
+                                    "Last wallpaper change: " +
+                                        android.text.format.DateFormat
+                                            .getTimeFormat(context)
+                                            .format(java.util.Date(lastChangedAt)),
+                                    color = Color.LightGray,
+                                    fontSize = 12.sp
+                                )
+                            }
 
                             Text(
                                 if (rotationRunning) "Automatic rotation is active"
@@ -483,24 +567,50 @@ fun WallpaperShuttleApp(context: Context) {
                                 color = Color.LightGray
                             )
                         } else {
-                            Row(
-                                modifier = Modifier.horizontalScroll(
-                                    rememberScrollState()
-                                ),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                imageUris.forEach { uri ->
-                                    AsyncImage(
-                                        model = uri,
-                                        contentDescription = "Gallery image",
-                                        modifier = Modifier
-                                            .size(105.dp)
-                                            .clickable {
-                                                selectedImage = uri
-                                                statusMessage = "Image selected."
-                                            },
-                                        contentScale = ContentScale.Crop
-                                    )
+                                imageUris.chunked(3).forEach { imageRow ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        imageRow.forEach { uri ->
+                                            val isSelected = uri == selectedImage
+
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(112.dp)
+                                                    .clip(RoundedCornerShape(12.dp))
+                                                    .border(
+                                                        width = if (isSelected) 3.dp else 1.dp,
+                                                        color = if (isSelected) Accent
+                                                        else Color(0xFF344055),
+                                                        shape = RoundedCornerShape(12.dp)
+                                                    )
+                                                    .clickable {
+                                                        selectedImage = uri
+                                                        statusMessage = "Image selected."
+                                                    }
+                                            ) {
+                                                AsyncImage(
+                                                    model = uri,
+                                                    contentDescription = "Gallery image",
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    contentScale = ContentScale.Crop
+                                                )
+                                            }
+                                        }
+
+                                        repeat(3 - imageRow.size) {
+                                            Spacer(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(112.dp)
+                                            )
+                                        }
+                                    }
                                 }
                             }
 
@@ -760,6 +870,74 @@ fun WallpaperShuttleApp(context: Context) {
                                 label = { Text("Both") }
                             )
                         }
+                    }
+                }
+
+                // WALLPAPER DISPLAY MODE
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = CardBackground
+                    ),
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            "WALLPAPER DISPLAY MODE",
+                            color = Accent,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            FilterChip(
+                                selected = displayMode == "crop",
+                                onClick = {
+                                    displayMode = "crop"
+                                    preferences.edit()
+                                        .putString("display_mode", displayMode)
+                                        .apply()
+                                },
+                                label = { Text("Crop") }
+                            )
+
+                            FilterChip(
+                                selected = displayMode == "fit",
+                                onClick = {
+                                    displayMode = "fit"
+                                    preferences.edit()
+                                        .putString("display_mode", displayMode)
+                                        .apply()
+                                },
+                                label = { Text("Fit") }
+                            )
+
+                            FilterChip(
+                                selected = displayMode == "stretch",
+                                onClick = {
+                                    displayMode = "stretch"
+                                    preferences.edit()
+                                        .putString("display_mode", displayMode)
+                                        .apply()
+                                },
+                                label = { Text("Stretch") }
+                            )
+                        }
+
+                        Text(
+                            when (displayMode) {
+                                "fit" -> "Shows the complete image with black space where needed."
+                                "stretch" -> "Fills the screen but may alter image proportions."
+                                else -> "Fills the screen while cropping excess image edges."
+                            },
+                            color = Color.LightGray,
+                            fontSize = 12.sp
+                        )
                     }
                 }
 
