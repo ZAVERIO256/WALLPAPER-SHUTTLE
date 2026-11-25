@@ -71,9 +71,40 @@ class WallpaperRotationService : Service() {
     private var cachedImages: List<Uri> = emptyList()
     private var cachedFolderUri: String? = null
     private var lastImageScanAt = 0L
-    private var loopScheduled = false
-    private var loopGeneration = 0
+    @Volatile private var loopScheduled = false
+    @Volatile private var cycleInProgress = false
+    @Volatile private var nextCycleDueAt = 0L
+    @Volatile private var loopGeneration = 0
     private var lastStatus: String = "Rotation is active"
+    private val watchdogHandler = Handler(Looper.getMainLooper())
+
+    private val watchdogTask = object : Runnable {
+        override fun run() {
+            if (!preferences.getBoolean("rotation_enabled", false)) return
+
+            val intervalMillis = TimeUnit.SECONDS.toMillis(
+                preferences.getInt("interval_seconds", 5).coerceIn(5, 86400).toLong()
+            )
+            ensureRotationThread()
+
+            val now = SystemClock.elapsedRealtime()
+            val deadlineMissed = nextCycleDueAt > 0L &&
+                now > nextCycleDueAt + maxOf(30_000L, intervalMillis * 2L)
+
+            if (!cycleInProgress && (!loopScheduled || deadlineMissed)) {
+                rotationHandler.removeCallbacks(rotationTask)
+                loopGeneration++
+                loopScheduled = true
+                nextCycleDueAt = now
+                rotationHandler.post(rotationTask)
+                preferences.edit()
+                    .putString("last_rotation_status", "Rotation loop recovered automatically")
+                    .commit()
+            }
+
+            watchdogHandler.postDelayed(this, 15_000L)
+        }
+    }
 
     private val rotationTask = object : Runnable {
         override fun run() {
@@ -82,6 +113,8 @@ class WallpaperRotationService : Service() {
                 return
             }
 
+            loopScheduled = false
+            cycleInProgress = true
             val intervalSeconds = preferences
                 .getInt("interval_seconds", 5)
                 .coerceIn(5, 86400)
@@ -89,11 +122,18 @@ class WallpaperRotationService : Service() {
             val generationAtStart = loopGeneration
             val startedAt = SystemClock.elapsedRealtime()
 
-            lastStatus = rotateToRandomImage()
+            try {
+                lastStatus = rotateToRandomImage()
+            } catch (error: Exception) {
+                lastStatus = "Rotation issue: ${error.message ?: "Unexpected error"}"
+            }
 
             // An interval update or pause may have happened while the image
             // was being prepared. Do not let the old run schedule another loop.
-            if (generationAtStart != loopGeneration) return
+            if (generationAtStart != loopGeneration) {
+                cycleInProgress = false
+                return
+            }
 
             // Count processing time toward the chosen interval. If processing
             // takes longer than the interval, start the next cycle immediately.
@@ -108,9 +148,24 @@ class WallpaperRotationService : Service() {
                 .putString("last_rotation_status", lastStatus)
                 .commit()
 
-            updateForegroundNotification(intervalSeconds)
+            try {
+                updateForegroundNotification(intervalSeconds)
+            } catch (notificationError: Exception) {
+                preferences.edit()
+                    .putString(
+                        "last_rotation_status",
+                        "$lastStatus (notification update issue: ${notificationError.message ?: "unknown"})"
+                    )
+                    .commit()
+            }
+
+            cycleInProgress = false
             loopScheduled = true
-            rotationHandler.postDelayed(this, remainingDelay)
+            nextCycleDueAt = SystemClock.elapsedRealtime() + remainingDelay
+            if (!rotationHandler.postDelayed(this, remainingDelay)) {
+                loopScheduled = false
+                nextCycleDueAt = 0L
+            }
         }
     }
 
@@ -128,6 +183,21 @@ class WallpaperRotationService : Service() {
             WAKE_LOCK_TAG
         ).apply {
             setReferenceCounted(false)
+        }
+
+        watchdogHandler.postDelayed(watchdogTask, 15_000L)
+    }
+
+    private fun ensureRotationThread() {
+        if (!::rotationThread.isInitialized || !rotationThread.isAlive) {
+            if (::rotationThread.isInitialized) {
+                try { rotationThread.quitSafely() } catch (_: Exception) { }
+            }
+            rotationThread = HandlerThread("WallpaperRotationLoop").apply { start() }
+            rotationHandler = Handler(rotationThread.looper)
+            cycleInProgress = false
+            loopScheduled = false
+            nextCycleDueAt = 0L
         }
     }
 
@@ -168,10 +238,12 @@ class WallpaperRotationService : Service() {
                         preferences.edit().putLong("next_rotation_time", nextChangeAt).commit()
                         updateForegroundNotification(seconds)
                         loopScheduled = true
-                        rotationHandler.postDelayed(
-                            rotationTask,
-                            TimeUnit.SECONDS.toMillis(seconds.toLong())
-                        )
+                        val delayMillis = TimeUnit.SECONDS.toMillis(seconds.toLong())
+                        nextCycleDueAt = SystemClock.elapsedRealtime() + delayMillis
+                        if (!rotationHandler.postDelayed(rotationTask, delayMillis)) {
+                            loopScheduled = false
+                            nextCycleDueAt = 0L
+                        }
                     }
                     ACTION_ENSURE -> {
                         // Reopening the app should repair a missing service without
@@ -179,14 +251,22 @@ class WallpaperRotationService : Service() {
                         if (!loopScheduled) {
                             loopGeneration++
                             loopScheduled = true
-                            rotationHandler.post(rotationTask)
+                            nextCycleDueAt = SystemClock.elapsedRealtime()
+                            if (!rotationHandler.post(rotationTask)) {
+                                loopScheduled = false
+                                nextCycleDueAt = 0L
+                            }
                         }
                     }
                     else -> {
                         loopGeneration++
                         rotationHandler.removeCallbacks(rotationTask)
                         loopScheduled = true
-                        rotationHandler.post(rotationTask)
+                        nextCycleDueAt = SystemClock.elapsedRealtime()
+                        if (!rotationHandler.post(rotationTask)) {
+                            loopScheduled = false
+                            nextCycleDueAt = 0L
+                        }
                     }
                 }
                 return START_STICKY
@@ -385,6 +465,9 @@ class WallpaperRotationService : Service() {
     private fun stopServiceCleanly() {
         loopGeneration++
         loopScheduled = false
+        cycleInProgress = false
+        nextCycleDueAt = 0L
+        watchdogHandler.removeCallbacks(watchdogTask)
         rotationHandler.removeCallbacks(rotationTask)
         preferences.edit()
             .putBoolean("rotation_enabled", false)
@@ -405,13 +488,26 @@ class WallpaperRotationService : Service() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // Closing the activity/task is not a request to pause rotation.
+        // Removing the app card from Recents is not a Pause command. Keep the
+        // foreground service loop alive and repair a missing queued callback.
+        if (preferences.getBoolean("rotation_enabled", false) &&
+            !cycleInProgress && !loopScheduled
+        ) {
+            ensureRotationThread()
+            loopGeneration++
+            loopScheduled = true
+            nextCycleDueAt = SystemClock.elapsedRealtime()
+            rotationHandler.post(rotationTask)
+        }
         super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
         loopGeneration++
         loopScheduled = false
+        cycleInProgress = false
+        nextCycleDueAt = 0L
+        watchdogHandler.removeCallbacks(watchdogTask)
         rotationHandler.removeCallbacksAndMessages(null)
         if (wakeLock?.isHeld == true) {
             wakeLock?.release()
