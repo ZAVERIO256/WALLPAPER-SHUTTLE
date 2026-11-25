@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.content.ContextCompat
@@ -1048,6 +1049,68 @@ fun WallpaperShuttleApp(context: Context) {
                             },
                             color = Color.LightGray,
                             fontSize = 12.sp
+                        )
+                    }
+                }
+
+                // BACKGROUND RELIABILITY
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = CardBackground),
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            "KEEP WALLPAPER SHUTTLE RUNNING",
+                            color = Accent,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        OutlinedButton(
+                            onClick = {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                    val powerManager = context.getSystemService(
+                                        Context.POWER_SERVICE
+                                    ) as android.os.PowerManager
+
+                                    if (powerManager.isIgnoringBatteryOptimizations(
+                                            context.packageName
+                                        )
+                                    ) {
+                                        statusMessage =
+                                            "Battery optimisation is already disabled for Wallpaper Shuttle."
+                                    } else {
+                                        try {
+                                            context.startActivity(
+                                                Intent(
+                                                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                                    Uri.parse("package:${context.packageName}")
+                                                )
+                                            )
+                                            statusMessage =
+                                                "Approve unrestricted battery use for Wallpaper Shuttle."
+                                        } catch (error: Exception) {
+                                            statusMessage =
+                                                "Open Android battery settings and allow unrestricted background use: ${error.message}"
+                                        }
+                                    }
+                                } else {
+                                    statusMessage = "This Android version does not require battery optimisation exemption."
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("DISABLE BATTERY OPTIMISATION")
+                        }
+
+                        Text(
+                            "Infinix XOS also needs Auto-start enabled and Wallpaper Shuttle locked in Recent Apps. In Phone Master or XManager, allow this app to auto-start and exclude it from memory cleaning. Do not use Force stop or Freeze.",
+                            color = Color.LightGray,
+                            fontSize = 12.sp,
+                            lineHeight = 18.sp
                         )
                     }
                 }
