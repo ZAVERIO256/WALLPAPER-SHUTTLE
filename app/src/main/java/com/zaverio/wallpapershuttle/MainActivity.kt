@@ -42,7 +42,7 @@ private val CardBackground = Color(0xFF1C2638)
 private val Accent = Color(0xFF7C9CFF)
 
 private fun formatRotationInterval(totalSeconds: Int): String {
-    val seconds = totalSeconds.coerceIn(10, 86400)
+    val seconds = totalSeconds.coerceIn(5, 86400)
     return when {
         seconds < 60 -> "$seconds seconds"
         seconds % 3600 == 0 -> {
@@ -140,9 +140,17 @@ fun WallpaperShuttleApp(context: Context) {
         mutableStateOf(preferences.getBoolean("rotation_enabled", false))
     }
 
+    // Move users who were still on the old 10-second default to the new 5-second default.
+    if (preferences.getInt("five_second_timer_migration", 0) < 1) {
+        if (preferences.getInt("interval_seconds", 10) == 10) {
+            preferences.edit().putInt("interval_seconds", 5).apply()
+        }
+        preferences.edit().putInt("five_second_timer_migration", 1).apply()
+    }
+
     var intervalSeconds by remember {
         mutableIntStateOf(
-            preferences.getInt("interval_seconds", 10).coerceIn(10, 86400)
+            preferences.getInt("interval_seconds", 5).coerceIn(5, 86400)
         )
     }
     var intervalMenuExpanded by remember { mutableStateOf(false) }
@@ -1025,7 +1033,7 @@ fun WallpaperShuttleApp(context: Context) {
                                 modifier = Modifier.heightIn(max = 420.dp)
                             ) {
                                 listOf(
-                                    10, 20, 30, 40, 50,
+                                    5, 10, 20, 30, 40, 50,
                                     60, 120, 180, 300, 600, 900, 1800,
                                     3600, 7200, 21600, 43200, 86400
                                 ).forEach { seconds ->
@@ -1034,6 +1042,32 @@ fun WallpaperShuttleApp(context: Context) {
                                         onClick = {
                                             intervalSeconds = seconds
                                             intervalMenuExpanded = false
+
+                                            // Restart the active countdown using the newly selected interval.
+                                            if (rotationRunning) {
+                                                val nextChangeAt =
+                                                    System.currentTimeMillis() +
+                                                        seconds.toLong() * 1000L
+                                                preferences.edit()
+                                                    .putInt("interval_seconds", seconds)
+                                                    .putLong("next_rotation_time", nextChangeAt)
+                                                    .apply()
+
+                                                val nextRequest =
+                                                    OneTimeWorkRequestBuilder<WallpaperRotationWorker>()
+                                                        .setInitialDelay(
+                                                            seconds.toLong(),
+                                                            java.util.concurrent.TimeUnit.SECONDS
+                                                        )
+                                                        .addTag(WallpaperRotationWorker.WORK_NAME)
+                                                        .build()
+
+                                                WorkManager.getInstance(context).enqueueUniqueWork(
+                                                    WallpaperRotationWorker.WORK_NAME,
+                                                    ExistingWorkPolicy.REPLACE,
+                                                    nextRequest
+                                                )
+                                            }
                                         },
                                         trailingIcon = {
                                             if (intervalSeconds == seconds) {
@@ -1046,7 +1080,7 @@ fun WallpaperShuttleApp(context: Context) {
                         }
 
                         Text(
-                            "Choose from 10 seconds up to 24 hours. Android may delay background changes to save battery.",
+                            "Choose from 5 seconds up to 24 hours. Android may delay background changes to save battery.",
                             color = Color.LightGray,
                             fontSize = 12.sp
                         )
@@ -1143,7 +1177,7 @@ fun WallpaperShuttleApp(context: Context) {
                                     Text("Designed for local use", color = Color.LightGray, fontSize = 10.sp)
                                 }
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("10s–24h", color = Accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    Text("5s–24h", color = Accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                     Text("Rotation interval", color = Color.LightGray, fontSize = 10.sp)
                                 }
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1245,7 +1279,7 @@ fun WallpaperShuttleApp(context: Context) {
                             Text("kdavidtyra@gmail.com", color = Color.White, fontSize = 13.sp)
                             Text("+256 701 303 855", color = Color.White, fontSize = 13.sp)
                             Text("App: Wallpaper Shuttle", color = Color.LightGray, fontSize = 11.sp)
-                            Text("Version 1.1", color = Color.LightGray, fontSize = 11.sp)
+                            Text("Version 1.2", color = Color.LightGray, fontSize = 11.sp)
                         }
                     }
 
