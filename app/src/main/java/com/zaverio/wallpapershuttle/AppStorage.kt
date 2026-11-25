@@ -24,7 +24,7 @@ object AppStorage {
     fun saveExcluded(context: Context, values: Set<String>) {
         prefs(context).edit()
             .putStringSet("excluded_uris", HashSet(values))
-            .apply()
+            .commit()
     }
 
     fun getHistory(context: Context): List<WallpaperHistoryEntry> {
@@ -70,12 +70,12 @@ object AppStorage {
 
         prefs(context).edit()
             .putString("wallpaper_history", json.toString())
-            .apply()
+            .commit()
     }
 
     fun clearHistory(context: Context) {
         prefs(context).edit()
             .remove("wallpaper_history")
-            .apply()
+            .commit()
     }
 }
