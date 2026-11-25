@@ -522,7 +522,7 @@ fun WallpaperShuttleApp(context: Context) {
                             )
 
                             Text(
-                                "Android may delay background changes to save battery.",
+                                "Short-interval mode keeps the CPU awake for faster changes and uses more battery.",
                                 color = Color.LightGray,
                                 fontSize = 11.sp
                             )
