@@ -76,6 +76,7 @@ class WallpaperRotationService : Service() {
             val intervalSeconds = preferences
                 .getInt("interval_seconds", 5)
                 .coerceIn(5, 86400)
+            maintainWakeLock(intervalSeconds)
             val startedAt = SystemClock.elapsedRealtime()
 
             lastStatus = rotateToRandomImage()
@@ -136,14 +137,15 @@ class WallpaperRotationService : Service() {
                 WorkManager.getInstance(applicationContext)
                     .cancelUniqueWork(WallpaperRotationWorker.WORK_NAME)
 
-                if (wakeLock?.isHeld != true) {
-                    wakeLock?.acquire()
-                }
+                val seconds = preferences.getInt("interval_seconds", 5)
+                    .coerceIn(5, 86400)
+                maintainWakeLock(seconds)
 
                 rotationHandler.removeCallbacks(rotationTask)
                 if (intent?.action == ACTION_UPDATE_INTERVAL) {
                     val seconds = preferences.getInt("interval_seconds", 5)
                         .coerceIn(5, 86400)
+                    maintainWakeLock(seconds)
                     val nextChangeAt = System.currentTimeMillis() +
                         TimeUnit.SECONDS.toMillis(seconds.toLong())
                     preferences.edit().putLong("next_rotation_time", nextChangeAt).commit()
@@ -177,6 +179,20 @@ class WallpaperRotationService : Service() {
             notification,
             foregroundType
         )
+    }
+
+    private fun maintainWakeLock(intervalSeconds: Int) {
+        val lock = wakeLock ?: return
+
+        // Keep the CPU awake for short, high-frequency rotation. For long
+        // intervals release it so the phone can sleep and conserve battery.
+        if (intervalSeconds <= 300) {
+            if (!lock.isHeld) {
+                lock.acquire(TimeUnit.MINUTES.toMillis(30))
+            }
+        } else if (lock.isHeld) {
+            lock.release()
+        }
     }
 
     private fun createNotificationChannel() {
