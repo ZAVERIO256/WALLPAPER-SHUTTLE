@@ -1,0 +1,28 @@
+<resources>
+
+    <style name="Theme.WallpaperShuttle.Starting"
+        parent="Theme.SplashScreen">
+
+        <item name="windowSplashScreenBackground">#101522</item>
+
+        <item name="windowSplashScreenAnimatedIcon">
+            @mipmap/ic_launcher
+        </item>
+
+        <item name="postSplashScreenTheme">
+            @style/Theme.WallpaperShuttle.App
+        </item>
+
+    </style>
+
+    <style name="Theme.WallpaperShuttle.App"
+        parent="@android:style/Theme.Material.Light.NoActionBar">
+
+        <item name="android:windowBackground">#101522</item>
+        <item name="android:statusBarColor">#101522</item>
+        <item name="android:navigationBarColor">#101522</item>
+        <item name="android:windowLightStatusBar">false</item>
+
+    </style>
+
+</resources>

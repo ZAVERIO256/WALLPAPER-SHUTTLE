@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.activity.ComponentActivity
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -39,6 +40,7 @@ private val Accent = Color(0xFF7C9CFF)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         setContent {
             WallpaperShuttleApp(this)
@@ -137,6 +139,8 @@ fun WallpaperShuttleApp(context: Context) {
             preferences.getString("last_rotation_status", null)
         )
     }
+
+    var selectedTab by remember { mutableIntStateOf(0) }
 
     val executor = remember { Executors.newSingleThreadExecutor() }
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
@@ -295,9 +299,11 @@ fun WallpaperShuttleApp(context: Context) {
             modifier = Modifier.fillMaxSize(),
             color = DarkBackground
         ) {
+            Column(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .weight(1f)
+                    .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
                     .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -314,6 +320,94 @@ fun WallpaperShuttleApp(context: Context) {
                     color = Color.LightGray
                 )
 
+
+                if (selectedTab == 0) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = CardBackground
+                        ),
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(18.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                "WALLPAPER OVERVIEW",
+                                color = Accent,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            if (selectedImage != null) {
+                                AsyncImage(
+                                    model = selectedImage,
+                                    contentDescription = "Selected wallpaper",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(190.dp),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Text(
+                                    "Select an image folder in Gallery to get started.",
+                                    color = Color.LightGray
+                                )
+                            }
+
+                            Text(
+                                "${imageUris.size} images available",
+                                color = Color.White
+                            )
+
+                            Text(
+                                "Change interval: $interval minutes",
+                                color = Color.LightGray
+                            )
+
+                            Text(
+                                if (rotationRunning) "Automatic rotation is active"
+                                else "Automatic rotation is paused",
+                                color = if (rotationRunning)
+                                    Color(0xFF86D6A3)
+                                else Color.LightGray
+                            )
+
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = { startRotation() },
+                                    enabled = !rotationRunning &&
+                                        imageUris.isNotEmpty(),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Start")
+                                }
+
+                                OutlinedButton(
+                                    onClick = { pauseRotation() },
+                                    enabled = rotationRunning,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Pause")
+                                }
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    selectedTab = 1
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("OPEN MY GALLERY")
+                            }
+                        }
+                    }
+                }
+
+
+                if (selectedTab == 1) {
                 // FOLDER MANAGER
                 Card(
                     colors = CardDefaults.cardColors(
@@ -607,6 +701,8 @@ fun WallpaperShuttleApp(context: Context) {
                     }
                 }
 
+                }
+                if (selectedTab == 2) {
                 // DESTINATION
                 Card(
                     colors = CardDefaults.cardColors(
@@ -750,6 +846,8 @@ fun WallpaperShuttleApp(context: Context) {
 
                 HorizontalDivider(color = Color(0xFF344055))
 
+                }
+                if (selectedTab == 3) {
                 // DEVELOPER FOOTER
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -789,6 +887,38 @@ fun WallpaperShuttleApp(context: Context) {
                     )
                 }
             }
+
+            NavigationBar(
+                containerColor = CardBackground,
+                contentColor = Color.White
+            ) {
+                NavigationBarItem(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    icon = { Text("⌂") },
+                    label = { Text("Home") }
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    icon = { Text("▦") },
+                    label = { Text("Gallery") }
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 },
+                    icon = { Text("⚙") },
+                    label = { Text("Settings") }
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 3,
+                    onClick = { selectedTab = 3 },
+                    icon = { Text("ⓘ") },
+                    label = { Text("About") }
+                )
+            }
         }
     }
+}
+}
 }
