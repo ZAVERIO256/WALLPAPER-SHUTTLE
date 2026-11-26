@@ -1268,7 +1268,8 @@ fun WallpaperShuttleApp(context: Context) {
                     }
                 }
 
-                // DESTINATION                Card(
+                // DESTINATION
+                Card(
                     colors = CardDefaults.cardColors(
                         containerColor = CardBackground
                     ),
