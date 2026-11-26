@@ -38,6 +38,11 @@
         </service>
 
         <receiver
+            android:name=".WallpaperRotationRestartReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <receiver
             android:name=".WallpaperRotationBootReceiver"
             android:enabled="true"
             android:exported="false">
