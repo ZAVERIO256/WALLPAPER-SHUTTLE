@@ -37,6 +37,7 @@ class ShuffleLiveWallpaperService : WallpaperService() {
         private var surfaceReady = false
 
         private var lastManualRequest = 0L
+        private var lastScheduleRefreshRequest = 0L
         private val manualRequestTask = object : Runnable {
             override fun run() {
                 if (destroyed) return
@@ -48,6 +49,12 @@ class ShuffleLiveWallpaperService : WallpaperService() {
                         val target = prefs.getString("manual_target_uri", null)?.let(Uri::parse)
                         showNextImage(target)
                         scheduleNextRotation()
+                    }
+                    val refreshRequest = prefs.getLong("schedule_refresh_request", 0L)
+                    if (refreshRequest != lastScheduleRefreshRequest) {
+                        lastScheduleRefreshRequest = refreshRequest
+                        scheduleNextRotation()
+                        prefs.edit().putString("last_rotation_status", "Rotation schedule updated").apply()
                     }
                     handler.postDelayed(this, 600L)
                 }
@@ -122,6 +129,7 @@ class ShuffleLiveWallpaperService : WallpaperService() {
             if (visible && rotationEnabled()) {
                 if (surfaceReady) showNextImage()
                 lastManualRequest = preferences().getLong("manual_change_request", 0L)
+                lastScheduleRefreshRequest = preferences().getLong("schedule_refresh_request", 0L)
                 handler.post(manualRequestTask)
                 scheduleNextRotation()
             } else {
