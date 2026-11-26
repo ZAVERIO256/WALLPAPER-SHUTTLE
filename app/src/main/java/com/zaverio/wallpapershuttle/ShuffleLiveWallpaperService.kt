@@ -245,9 +245,18 @@ class ShuffleLiveWallpaperService : WallpaperService() {
             // pictures are reflected without reopening the app.
             imageUris = findImages(root)
             val excluded = prefs.getStringSet("excluded_uris", emptySet())?.toSet() ?: emptySet()
+            val favourites = prefs.getStringSet("favourite_images", emptySet())?.toSet() ?: emptySet()
+            val favouritesOnly = prefs.getBoolean("favourites_only_rotation", false)
             val eligible = imageUris.filterNot { it.toString() in excluded }
+                .filter { !favouritesOnly || it.toString() in favourites }
             if (eligible.isEmpty()) {
-                setStatus(if (imageUris.isEmpty()) "No supported images found in the selected folder" else "All images are excluded")
+                val message = when {
+                    imageUris.isEmpty() -> "No supported images found in the selected folder"
+                    favouritesOnly && favourites.isEmpty() -> "Favourite-only rotation is enabled, but no images are favourited"
+                    favouritesOnly -> "No eligible favourites found. Favourite an image or turn off Favourite-only rotation"
+                    else -> "All images are excluded"
+                }
+                setStatus(message)
                 return
             }
 
