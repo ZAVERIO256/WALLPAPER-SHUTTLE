@@ -1163,6 +1163,33 @@ fun WallpaperShuttleApp(context: Context) {
                 }
 
                 if (selectedTab == 2) {
+                // ROTATION INSIGHTS
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = CardBackground),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text("ROTATION INSIGHTS", color = Accent, fontWeight = FontWeight.Bold)
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("TOTAL CHANGES", color = Color.LightGray, fontSize = 10.sp)
+                                Text("${preferences.getInt("total_rotation_count", 0)}", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("UNREADABLE SKIPPED", color = Color.LightGray, fontSize = 10.sp)
+                                Text("${preferences.getInt("unreadable_image_count", 0)}", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        HorizontalDivider(color = Color(0x334F6688))
+                        Text(if (smartScheduleEnabled) "Smart schedule is ON • rotation speed changes through the day" else "Fixed schedule is ON • ${formatRotationInterval(intervalSeconds)} between changes", color = AccentMint, fontSize = 12.sp)
+                        Text("Images in selected folder: ${imageUris.size}. Statistics count successful wallpaper changes.", color = Color.LightGray, fontSize = 12.sp)
+                    }
+                }
+
                 // DESTINATION
                 Card(
                     colors = CardDefaults.cardColors(
@@ -1681,7 +1708,7 @@ fun WallpaperShuttleApp(context: Context) {
                             Text("kdavidtyra@gmail.com", color = Color.White, fontSize = 13.sp)
                             Text("+256 701 303 855", color = Color.White, fontSize = 13.sp)
                             Text("App: Wallpaper Shuttle", color = Color.LightGray, fontSize = 11.sp)
-                            Text("Version 1.16", color = Color.LightGray, fontSize = 11.sp)
+                            Text("Version 1.17", color = Color.LightGray, fontSize = 11.sp)
                         }
                     }
 
