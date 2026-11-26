@@ -207,7 +207,7 @@ class ShuffleLiveWallpaperService : WallpaperService() {
             val candidates = eligible.filter { it != lastUri }.ifEmpty { eligible }
             val chosen = candidates.random()
             val decoded = try {
-                contentResolver.openInputStream(chosen)?.use { BitmapFactory.decodeStream(it) }
+                decodeForWallpaper(chosen)
             } catch (_: Exception) {
                 null
             }
@@ -231,6 +231,54 @@ class ShuffleLiveWallpaperService : WallpaperService() {
                 .apply()
             drawFrame()
             if (previousBitmap != null) handler.post(fadeTask)
+        }
+
+        /**
+         * Decode only enough pixels for the current wallpaper surface. Large
+         * camera images can otherwise consume tens of megabytes per bitmap,
+         * especially while two images overlap during the crossfade.
+         */
+        private fun decodeForWallpaper(uri: Uri): Bitmap? {
+            if (surfaceWidth <= 0 || surfaceHeight <= 0) {
+                return contentResolver.openInputStream(uri)?.use {
+                    BitmapFactory.decodeStream(it)
+                }
+            }
+
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            contentResolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(it, null, bounds)
+            }
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+            val mode = preferences().getString("display_mode", "crop") ?: "crop"
+            val sourceWidth = bounds.outWidth.toFloat()
+            val sourceHeight = bounds.outHeight.toFloat()
+            val scaleX = surfaceWidth / sourceWidth
+            val scaleY = surfaceHeight / sourceHeight
+            val renderScale = when (mode) {
+                "fit" -> minOf(scaleX, scaleY)
+                "stretch" -> 1f
+                else -> maxOf(scaleX, scaleY)
+            }.coerceAtLeast(0.0001f)
+
+            val requiredWidth = (surfaceWidth / renderScale).toInt().coerceAtLeast(1)
+            val requiredHeight = (surfaceHeight / renderScale).toInt().coerceAtLeast(1)
+            var sampleSize = 1
+            while (
+                bounds.outWidth / (sampleSize * 2) >= requiredWidth &&
+                bounds.outHeight / (sampleSize * 2) >= requiredHeight
+            ) {
+                sampleSize *= 2
+            }
+
+            val options = BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                inPreferredConfig = Bitmap.Config.RGB_565
+            }
+            return contentResolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(it, null, options)
+            }
         }
 
         private fun drawImage(canvas: Canvas, image: Bitmap, alpha: Int) {
