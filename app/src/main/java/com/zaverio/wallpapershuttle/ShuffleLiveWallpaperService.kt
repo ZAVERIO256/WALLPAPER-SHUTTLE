@@ -108,6 +108,7 @@ class ShuffleLiveWallpaperService : WallpaperService() {
                 else drawFrame()
                 // Surface recreation must restart the timer; otherwise a
                 // destroyed surface could leave rotation permanently stalled.
+                if (previousBitmap != null) handler.post(fadeTask)
                 scheduleNextRotation()
             }
         }
@@ -229,6 +230,7 @@ class ShuffleLiveWallpaperService : WallpaperService() {
                 .putString("last_rotation_status", "Live wallpaper image changed successfully")
                 .apply()
             drawFrame()
+            if (previousBitmap != null) handler.post(fadeTask)
         }
 
         private fun drawImage(canvas: Canvas, image: Bitmap, alpha: Int) {
