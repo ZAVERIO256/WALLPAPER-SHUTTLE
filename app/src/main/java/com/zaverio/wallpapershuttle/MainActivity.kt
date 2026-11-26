@@ -31,6 +31,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -40,9 +41,11 @@ import coil.compose.AsyncImage
 import java.util.concurrent.Executors
 import kotlinx.coroutines.delay
 
-private val DarkBackground = Color(0xFF101522)
-private val CardBackground = Color(0xFF1C2638)
-private val Accent = Color(0xFF7C9CFF)
+private val DarkBackground = Color(0xFF090E1A)
+private val CardBackground = Color(0xFF151F31)
+private val Accent = Color(0xFF9B8CFF)
+private val AccentMint = Color(0xFF65E0C1)
+private val MutedText = Color(0xFFB4BED0)
 
 private fun formatRotationInterval(totalSeconds: Int): String {
     val seconds = totalSeconds.coerceIn(5, 86400)
@@ -416,12 +419,28 @@ fun WallpaperShuttleApp(context: Context) {
         }
     }
 
-    MaterialTheme {
+    MaterialTheme(
+        colorScheme = darkColorScheme(
+            primary = Accent,
+            onPrimary = Color(0xFF100D20),
+            secondary = AccentMint,
+            onSecondary = Color(0xFF06231D),
+            background = DarkBackground,
+            surface = CardBackground,
+            onSurface = Color(0xFFF5F6FC),
+            surfaceVariant = Color(0xFF202C42),
+            onSurfaceVariant = MutedText
+        )
+    ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = DarkBackground
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Brush.verticalGradient(listOf(Color(0xFF111A2B), DarkBackground, Color(0xFF080C15))))
+            ) {
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -430,16 +449,68 @@ fun WallpaperShuttleApp(context: Context) {
                     .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text(
-                    "WALLPAPER SHUTTLE",
-                    color = Color.White,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(13.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(Brush.linearGradient(listOf(Accent, Color(0xFF55C9D8)))),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("✦", color = Color(0xFF101522), fontSize = 29.sp, fontWeight = FontWeight.Black)
+                    }
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(
+                            "WALLPAPER SHUTTLE",
+                            color = Color.White,
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 0.7.sp
+                        )
+                        Text("Make every screen feel new.", color = MutedText, fontSize = 12.sp)
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = if (rotationRunning) AccentMint.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.07f),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (rotationRunning) AccentMint.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.12f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Box(
+                                Modifier.size(7.dp).clip(RoundedCornerShape(50))
+                                    .background(if (rotationRunning) AccentMint else MutedText)
+                            )
+                            Text(
+                                if (rotationRunning) "ACTIVE" else "READY",
+                                color = if (rotationRunning) AccentMint else MutedText,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.6.sp
+                            )
+                        }
+                    }
+                }
 
                 Text(
-                    "Your wallpapers. Your style.",
-                    color = Color.LightGray
+                    when (selectedTab) {
+                        0 -> "Your personal wallpaper studio"
+                        1 -> "Your collection, all in one place"
+                        2 -> "Fine-tune your experience"
+                        else -> "Everything about the app"
+                    },
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold
                 )
 
 
@@ -466,7 +537,8 @@ fun WallpaperShuttleApp(context: Context) {
                         colors = CardDefaults.cardColors(
                             containerColor = CardBackground
                         ),
-                        shape = RoundedCornerShape(20.dp)
+                        elevation = CardDefaults.cardElevation(defaultElevation = 5.dp),
+                        shape = RoundedCornerShape(24.dp)
                     ) {
                         Column(
                             modifier = Modifier.padding(18.dp),
@@ -610,7 +682,8 @@ fun WallpaperShuttleApp(context: Context) {
                     colors = CardDefaults.cardColors(
                         containerColor = CardBackground
                     ),
-                    shape = RoundedCornerShape(18.dp)
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                    shape = RoundedCornerShape(22.dp)
                 ) {
                     Column(
                         modifier = Modifier.padding(18.dp),
@@ -1071,7 +1144,8 @@ fun WallpaperShuttleApp(context: Context) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = CardBackground),
-                    shape = RoundedCornerShape(18.dp)
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                    shape = RoundedCornerShape(22.dp)
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
@@ -1261,6 +1335,7 @@ fun WallpaperShuttleApp(context: Context) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = CardBackground),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 5.dp),
                         shape = RoundedCornerShape(24.dp)
                     ) {
                         Column(
@@ -1320,7 +1395,8 @@ fun WallpaperShuttleApp(context: Context) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = CardBackground),
-                        shape = RoundedCornerShape(20.dp)
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                        shape = RoundedCornerShape(22.dp)
                     ) {
                         Column(
                             modifier = Modifier.padding(18.dp),
