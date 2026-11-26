@@ -205,29 +205,51 @@ class ShuffleLiveWallpaperService : WallpaperService() {
                 lastUri = prefs.getString("last_image_uri", null)?.let(Uri::parse)
             }
             val candidates = eligible.filter { it != lastUri }.ifEmpty { eligible }
-            val chosen = candidates.random()
-            val decoded = try {
-                decodeForWallpaper(chosen)
-            } catch (_: Exception) {
-                null
+            // A damaged or temporarily unreadable file should not leave the
+            // display stuck: try several different images before giving up.
+            var chosen: Uri? = null
+            var decoded: Bitmap? = null
+            var failedAttempts = 0
+            for (candidate in candidates.shuffled().take(minOf(4, candidates.size))) {
+                val attempt = try {
+                    decodeForWallpaper(candidate)
+                } catch (_: Exception) {
+                    null
+                }
+                if (attempt != null) {
+                    chosen = candidate
+                    decoded = attempt
+                    break
+                }
+                failedAttempts++
             }
 
-            if (decoded == null) {
-                setStatus("Could not read an image. Will try another on the next rotation")
+            val newBitmap = decoded
+            val selectedUri = chosen
+            if (newBitmap == null || selectedUri == null) {
+                prefs.edit()
+                    .putInt("unreadable_image_count", prefs.getInt("unreadable_image_count", 0) + failedAttempts)
+                    .putString("last_rotation_status", "Could not read the selected images. Previous wallpaper kept; will retry later")
+                    .apply()
                 return
             }
 
             handler.removeCallbacks(fadeTask)
             previousBitmap?.recycle()
             previousBitmap = bitmap
-            bitmap = decoded
+            bitmap = newBitmap
             transitionStartedAt = SystemClock.uptimeMillis()
-            lastUri = chosen
+            lastUri = selectedUri
 
             prefs.edit()
-                .putString("last_image_uri", chosen.toString())
+                .putString("last_image_uri", selectedUri.toString())
                 .putLong("last_rotation_time", System.currentTimeMillis())
-                .putString("last_rotation_status", "Live wallpaper image changed successfully")
+                .putInt("unreadable_image_count", prefs.getInt("unreadable_image_count", 0) + failedAttempts)
+                .putString(
+                    "last_rotation_status",
+                    if (failedAttempts > 0) "Wallpaper changed; skipped $failedAttempts unreadable image(s)"
+                    else "Live wallpaper image changed successfully"
+                )
                 .apply()
             drawFrame()
             if (previousBitmap != null) handler.post(fadeTask)
@@ -275,9 +297,18 @@ class ShuffleLiveWallpaperService : WallpaperService() {
             val options = BitmapFactory.Options().apply {
                 inSampleSize = sampleSize
             }
-            return contentResolver.openInputStream(uri)?.use {
+            val decoded = contentResolver.openInputStream(uri)?.use {
                 BitmapFactory.decodeStream(it, null, options)
             }
+            if (decoded != null) {
+                preferences().edit()
+                    .putString(
+                        "last_image_quality",
+                        "${bounds.outWidth}×${bounds.outHeight} source → ${decoded.width}×${decoded.height} loaded"
+                    )
+                    .apply()
+            }
+            return decoded
         }
 
         private fun drawImage(canvas: Canvas, image: Bitmap, alpha: Int) {
