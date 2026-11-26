@@ -28,6 +28,17 @@
         </activity>
 
         <service
+            android:name=".ShuffleLiveWallpaperService"
+            android:label="Wallpaper Shuttle"
+            android:permission="android.permission.BIND_WALLPAPER"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService" />
+            </intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_shuttle" />
+        </service>
+
+        <service
             android:name=".WallpaperRotationService"
             android:enabled="true"
             android:exported="false"
