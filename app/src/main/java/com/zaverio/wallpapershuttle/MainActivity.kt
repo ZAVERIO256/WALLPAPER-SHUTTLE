@@ -431,6 +431,11 @@ fun WallpaperShuttleApp(context: Context) {
             onSurface = Color(0xFFF5F6FC),
             surfaceVariant = Color(0xFF202C42),
             onSurfaceVariant = MutedText
+        ),
+        shapes = Shapes(
+            small = RoundedCornerShape(14.dp),
+            medium = RoundedCornerShape(20.dp),
+            large = RoundedCornerShape(28.dp)
         )
     ) {
         Surface(
@@ -1499,32 +1504,61 @@ fun WallpaperShuttleApp(context: Context) {
                 }
 
             NavigationBar(
-                containerColor = CardBackground,
-                contentColor = Color.White
+                containerColor = Color(0xFF111A2A),
+                contentColor = Color.White,
+                tonalElevation = 12.dp
             ) {
                 NavigationBarItem(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
                     icon = { Text("⌂") },
-                    label = { Text("Home") }
+                    label = { Text("Home", fontWeight = if (selectedTab == 0) FontWeight.SemiBold else FontWeight.Normal) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = Accent,
+                        selectedTextColor = Accent,
+                        indicatorColor = Accent.copy(alpha = 0.16f),
+                        unselectedIconColor = MutedText,
+                        unselectedTextColor = MutedText
+                    )
                 )
                 NavigationBarItem(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
                     icon = { Text("▦") },
-                    label = { Text("Gallery") }
+                    label = { Text("Gallery", fontWeight = if (selectedTab == 1) FontWeight.SemiBold else FontWeight.Normal) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = Accent,
+                        selectedTextColor = Accent,
+                        indicatorColor = Accent.copy(alpha = 0.16f),
+                        unselectedIconColor = MutedText,
+                        unselectedTextColor = MutedText
+                    )
                 )
                 NavigationBarItem(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
                     icon = { Text("⚙") },
-                    label = { Text("Settings") }
+                    label = { Text("Settings", fontWeight = if (selectedTab == 2) FontWeight.SemiBold else FontWeight.Normal) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = Accent,
+                        selectedTextColor = Accent,
+                        indicatorColor = Accent.copy(alpha = 0.16f),
+                        unselectedIconColor = MutedText,
+                        unselectedTextColor = MutedText
+                    )
                 )
                 NavigationBarItem(
                     selected = selectedTab == 3,
                     onClick = { selectedTab = 3 },
                     icon = { Text("ⓘ") },
-                    label = { Text("About") }
+                    label = { Text("About", fontWeight = if (selectedTab == 3) FontWeight.SemiBold else FontWeight.Normal) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = Accent,
+                        selectedTextColor = Accent,
+                        indicatorColor = Accent.copy(alpha = 0.16f),
+                        unselectedIconColor = MutedText,
+                        unselectedTextColor = MutedText
+                    )
                 )
             }
         }
