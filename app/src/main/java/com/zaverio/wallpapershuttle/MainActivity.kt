@@ -163,6 +163,7 @@ fun WallpaperShuttleApp(context: Context) {
         mutableStateOf(preferences.getStringSet("favourite_images", emptySet())?.toSet() ?: emptySet())
     }
     var galleryFilter by remember { mutableStateOf("ALL") }
+    var favouritesOnlyRotation by remember { mutableStateOf(preferences.getBoolean("favourites_only_rotation", false)) }
     var showImagePreview by remember { mutableStateOf(false) }
 
     var excludedImages by remember {
@@ -360,6 +361,7 @@ fun WallpaperShuttleApp(context: Context) {
                     .put("smart_schedule_enabled", smartScheduleEnabled)
                     .put("destination", destination)
                     .put("display_mode", displayMode)
+                    .put("favourites_only_rotation", favouritesOnlyRotation)
                 context.contentResolver.openOutputStream(uri)?.use { it.write(backup.toString(2).toByteArray(Charsets.UTF_8)) }
                     ?: throw IllegalStateException("Could not open backup file")
                 backupMessage = "Backup saved successfully. Keep the file somewhere safe."
@@ -391,6 +393,7 @@ fun WallpaperShuttleApp(context: Context) {
                     .putInt("interval_seconds", restoredInterval)
                     .putBoolean("smart_schedule_enabled", backup.optBoolean("smart_schedule_enabled", false))
                     .putInt("destination", restoredDestination).putString("display_mode", restoredMode)
+                    .putBoolean("favourites_only_rotation", backup.optBoolean("favourites_only_rotation", false))
                     .putLong("schedule_refresh_request", System.currentTimeMillis()).apply()
                 favouriteImages = favs
                 excludedImages = excluded
@@ -399,6 +402,7 @@ fun WallpaperShuttleApp(context: Context) {
                 smartScheduleEnabled = backup.optBoolean("smart_schedule_enabled", false)
                 destination = restoredDestination
                 displayMode = restoredMode
+                favouritesOnlyRotation = backup.optBoolean("favourites_only_rotation", false)
                 selectedImage = null
                 backupMessage = "Backup restored. Re-select your wallpaper folder if needed. Rotation remains paused until you start it."
             } catch (error: Exception) { backupMessage = "Restore failed: ${error.message ?: "invalid backup"}" }
@@ -1254,8 +1258,28 @@ fun WallpaperShuttleApp(context: Context) {
                     }
                 }
 
-                // BACKUP & RESTORE
+                // FAVOURITE-ONLY ROTATION
                 Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardBackground), shape = RoundedCornerShape(20.dp)) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("FAVOURITE-ONLY ROTATION", color = Accent, fontWeight = FontWeight.Bold)
+                                Text("Rotate only pictures you have starred in Gallery.", color = Color.LightGray, fontSize = 12.sp, lineHeight = 17.sp)
+                            }
+                            Switch(checked = favouritesOnlyRotation, onCheckedChange = { enabled ->
+                                favouritesOnlyRotation = enabled
+                                preferences.edit().putBoolean("favourites_only_rotation", enabled)
+                                    .putLong("schedule_refresh_request", System.currentTimeMillis()).apply()
+                            })
+                        }
+                        Text(if (favouritesOnlyRotation) "ON • ${favouriteImages.size} favourite images saved. Excluded images are still skipped." else "OFF • All non-excluded images are eligible for rotation.", color = AccentMint, fontSize = 11.sp)
+                        if (favouritesOnlyRotation && favouriteImages.isEmpty()) {
+                            Text("Star some images in Gallery first, otherwise rotation will have no eligible pictures.", color = Color(0xFFFFC078), fontSize = 11.sp)
+                        }
+                    }
+                }
+
+                // BACKUP & RESTORE                Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardBackground), shape = RoundedCornerShape(20.dp)) {
                     Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("BACKUP & RESTORE", color = Accent, fontWeight = FontWeight.Bold)
                         Text("Save favourites, exclusions, wallpaper history, rotation schedule, destination and display mode in one portable file.", color = Color.LightGray, fontSize = 12.sp, lineHeight = 18.sp)
