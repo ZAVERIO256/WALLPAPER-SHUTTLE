@@ -375,6 +375,23 @@ fun WallpaperShuttleApp(context: Context) {
         }
     }
 
+    fun requestManualChange(previous: Boolean) {
+        if (!rotationRunning || !preferences.getBoolean("live_wallpaper_mode", false)) {
+            statusMessage = "Start live wallpaper rotation first."
+            return
+        }
+        val target = if (previous) AppStorage.getHistory(context).getOrNull(1)?.uri else null
+        if (previous && target == null) {
+            statusMessage = "No previous wallpaper is available yet."
+            return
+        }
+        preferences.edit()
+            .putString("manual_target_uri", target?.toString())
+            .putLong("manual_change_request", preferences.getLong("manual_change_request", 0L) + 1L)
+            .apply()
+        statusMessage = if (previous) "Returning to the previous wallpaper..." else "Choosing your next wallpaper..."
+    }
+
     fun pauseRotation() {
         preferences.edit()
             .putBoolean("rotation_enabled", false)
@@ -656,6 +673,22 @@ fun WallpaperShuttleApp(context: Context) {
                                     Color(0xFF86D6A3)
                                 else Color.LightGray
                             )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = { requestManualChange(true) },
+                                    enabled = rotationRunning,
+                                    modifier = Modifier.weight(1f)
+                                ) { Text("‹ Previous") }
+                                Button(
+                                    onClick = { requestManualChange(false) },
+                                    enabled = rotationRunning,
+                                    modifier = Modifier.weight(1f)
+                                ) { Text("Next wallpaper ›") }
+                            }
 
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
