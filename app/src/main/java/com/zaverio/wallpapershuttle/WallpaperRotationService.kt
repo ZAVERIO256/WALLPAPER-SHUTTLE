@@ -83,6 +83,21 @@ class WallpaperRotationService : Service() {
     private var lastStatus: String = "Rotation is active"
     private val watchdogHandler = Handler(Looper.getMainLooper())
 
+    // Screen-on is a recovery point: some Android vendor power managers pause
+    // background work while the display is off. Refresh the wallpaper as soon
+    // as the user wakes the phone, without requiring the app to be opened.
+    private val screenWakeReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == Intent.ACTION_SCREEN_ON ||
+                intent.action == Intent.ACTION_USER_PRESENT
+            ) {
+                if (preferences.getBoolean("rotation_enabled", false)) {
+                    scheduleRotationImmediately("Rotation resumed when the screen turned on")
+                }
+            }
+        }
+    }
+
     private val watchdogTask = object : Runnable {
         override fun run() {
             try {
@@ -223,6 +238,17 @@ class WallpaperRotationService : Service() {
         ).apply {
             setReferenceCounted(false)
         }
+
+        val screenFilter = android.content.IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_USER_PRESENT)
+        }
+        ContextCompat.registerReceiver(
+            this,
+            screenWakeReceiver,
+            screenFilter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
 
         watchdogHandler.postDelayed(watchdogTask, 15_000L)
     }
@@ -628,6 +654,7 @@ class WallpaperRotationService : Service() {
         cycleStartedAt = 0L
         nextCycleDueAt = 0L
         watchdogHandler.removeCallbacks(watchdogTask)
+        try { unregisterReceiver(screenWakeReceiver) } catch (_: Exception) { }
         rotationHandler.removeCallbacksAndMessages(null)
         if (wakeLock?.isHeld == true) {
             wakeLock?.release()
