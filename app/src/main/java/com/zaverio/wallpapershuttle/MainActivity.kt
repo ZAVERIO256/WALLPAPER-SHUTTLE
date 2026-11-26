@@ -2,6 +2,7 @@ package com.zaverio.wallpapershuttle
 
 import android.Manifest
 import android.app.WallpaperManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -64,7 +65,7 @@ private fun ensureActiveRotationService(context: Context) {
         "shuffle_wallpaper",
         Context.MODE_PRIVATE
     )
-    if (!preferences.getBoolean("rotation_enabled", false)) return
+    if (!preferences.getBoolean("rotation_enabled", false) || preferences.getBoolean("live_wallpaper_mode", false)) return
 
     try {
         WallpaperRotationService.start(
@@ -343,32 +344,27 @@ fun WallpaperShuttleApp(context: Context) {
             return
         }
 
-        preferences.edit()
-            .putBoolean("rotation_enabled", true)
-            .putBoolean("foreground_rotation_service", true)
-            .putLong("next_rotation_time", System.currentTimeMillis())
-            .commit()
-
+        preferences.edit().putBoolean("rotation_enabled", false).putBoolean("live_wallpaper_mode", false).commit()
+        WallpaperRotationService.stop(context)
+        preferences.edit().putBoolean("rotation_enabled", true).putBoolean("live_wallpaper_mode", true).putBoolean("foreground_rotation_service", false).putLong("next_rotation_time", System.currentTimeMillis()).commit()
         rotationRunning = true
-        statusMessage = "Continuous automatic wallpaper rotation started."
-
+        statusMessage = "Choose Set wallpaper in the Android preview to enable continuous live rotation."
         try {
-            // Start immediately; the permission request is handled separately so
-            // denying notification visibility does not delay wallpaper rotation.
-            WallpaperRotationService.start(context)
+            val liveWallpaperIntent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
+                putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT, ComponentName(context, ShuffleLiveWallpaperService::class.java))
+            }
+            context.startActivity(liveWallpaperIntent)
         } catch (error: Exception) {
-            preferences.edit()
-                .putBoolean("rotation_enabled", false)
-                .putBoolean("foreground_rotation_service", false)
-                .commit()
+            preferences.edit().putBoolean("rotation_enabled", false).putBoolean("live_wallpaper_mode", false).commit()
             rotationRunning = false
-            statusMessage = "Could not start continuous rotation: ${error.message}"
+            statusMessage = "Could not open Android live wallpaper preview."
         }
     }
 
     fun pauseRotation() {
         preferences.edit()
             .putBoolean("rotation_enabled", false)
+            .putBoolean("live_wallpaper_mode", false)
             .putBoolean("foreground_rotation_service", false)
             .remove("next_rotation_time")
             .commit()
