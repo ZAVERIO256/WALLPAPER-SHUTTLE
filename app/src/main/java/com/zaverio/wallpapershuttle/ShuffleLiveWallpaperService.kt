@@ -220,7 +220,8 @@ class ShuffleLiveWallpaperService : WallpaperService() {
             var chosen: Uri? = null
             var decoded: Bitmap? = null
             var failedAttempts = 0
-            for (candidate in candidates.shuffled().take(minOf(4, candidates.size))) {
+            val attemptCandidates = if (requestedUri != null && candidates.firstOrNull() == requestedUri) candidates.take(minOf(4, candidates.size)) else candidates.shuffled().take(minOf(4, candidates.size))
+            for (candidate in attemptCandidates) {
                 val attempt = try {
                     decodeForWallpaper(candidate)
                 } catch (_: Exception) {
