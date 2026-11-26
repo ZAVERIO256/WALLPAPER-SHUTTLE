@@ -1886,4 +1886,3 @@ fun WallpaperShuttleApp(context: Context) {
     }
 }
 }
-}
