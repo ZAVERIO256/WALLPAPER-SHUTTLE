@@ -41,6 +41,10 @@ The app uses a silent ongoing foreground-service notification while automatic ro
 
 The app works with the image folder that the user selects. Folder access, interval settings, exclusions, and wallpaper history are stored locally on the device. Normal app operation does not require an account or internet connection.
 
+## APK signing and updates
+
+GitHub Actions reuses a persistent **debug-only** signing key for APK builds so future CI builds can be installed as updates over the same CI-installed app. Wallpaper Shuttle 1.6 is the first build using this stable signing pipeline. APKs produced by older CI runs may have different temporary debug certificates; Android may require a one-time uninstall and reinstall when moving from those older builds to 1.6. Uninstalling clears Wallpaper Shuttle's local settings, history, exclusions, and saved folder permission, so select the wallpaper folder and configure rotation again after reinstalling. Your original image files and the wallpaper already applied to the phone are not deleted.
+
 ## Build
 
 The project uses Android Gradle Plugin, Kotlin, Jetpack Compose, and Java 17. To build a debug APK in a configured Android environment:
