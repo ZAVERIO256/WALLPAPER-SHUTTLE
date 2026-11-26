@@ -1,5 +1,6 @@
 package com.zaverio.wallpapershuttle
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -47,6 +48,7 @@ class WallpaperRotationService : Service() {
         private const val PREFS = "shuffle_wallpaper"
         private const val CHANNEL_ID = "wallpaper_rotation_active"
         private const val NOTIFICATION_ID = 7215
+        private const val SERVICE_RECOVERY_REQUEST = 7216
         private const val WAKE_LOCK_TAG = "WallpaperShuttle:Rotation"
         private const val CYCLE_STALL_TIMEOUT_MS = 90_000L
         private const val MAX_RETIRED_ROTATION_THREADS = 2
@@ -605,6 +607,7 @@ class WallpaperRotationService : Service() {
     }
 
     private fun stopServiceCleanly() {
+        cancelServiceRecovery()
         loopGeneration++
         loopScheduled = false
         cycleInProgress = false
@@ -644,10 +647,12 @@ class WallpaperRotationService : Service() {
             nextCycleDueAt = SystemClock.elapsedRealtime()
             rotationHandler.post(rotationTask)
         }
+        scheduleServiceRecovery()
         super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
+        scheduleServiceRecovery()
         loopGeneration++
         loopScheduled = false
         cycleInProgress = false
@@ -667,6 +672,41 @@ class WallpaperRotationService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun scheduleServiceRecovery() {
+        if (!preferences.getBoolean("rotation_enabled", false)) return
+        try {
+            val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val restartIntent = Intent(this, WallpaperRotationRestartReceiver::class.java)
+                .setAction(ACTION_ENSURE)
+            val restartPendingIntent = PendingIntent.getBroadcast(
+                this, SERVICE_RECOVERY_REQUEST, restartIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            alarmManager.setAndAllowWhileIdle(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                SystemClock.elapsedRealtime() + 3_000L, restartPendingIntent
+            )
+        } catch (error: Exception) {
+            preferences.edit().putString(
+                "last_rotation_status",
+                "Background recovery could not be scheduled: ${error.message ?: "unknown error"}"
+            ).commit()
+        }
+    }
+
+    private fun cancelServiceRecovery() {
+        try {
+            val restartIntent = Intent(this, WallpaperRotationRestartReceiver::class.java)
+                .setAction(ACTION_ENSURE)
+            val pendingIntent = PendingIntent.getBroadcast(
+                this, SERVICE_RECOVERY_REQUEST, restartIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            (getSystemService(Context.ALARM_SERVICE) as AlarmManager).cancel(pendingIntent)
+            pendingIntent.cancel()
+        } catch (_: Exception) { }
+    }
 }
 
 /**
@@ -701,6 +741,22 @@ class WallpaperRotationBootReceiver : BroadcastReceiver() {
                 ExistingWorkPolicy.REPLACE,
                 request
             )
+        }
+    }
+}
+
+/** Restarts rotation after device-specific task/service removal. */
+class WallpaperRotationRestartReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val preferences = context.getSharedPreferences("shuffle_wallpaper", Context.MODE_PRIVATE)
+        if (!preferences.getBoolean("rotation_enabled", false)) return
+        try {
+            WallpaperRotationService.start(context.applicationContext, WallpaperRotationService.ACTION_ENSURE)
+        } catch (error: Exception) {
+            preferences.edit()
+                .putBoolean("foreground_rotation_service", false)
+                .putString("last_rotation_status", "Automatic background restart failed: ${error.message ?: "unknown error"}")
+                .commit()
         }
     }
 }
