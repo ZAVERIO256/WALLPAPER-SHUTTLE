@@ -674,7 +674,7 @@ class WallpaperRotationService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun scheduleServiceRecovery() {
-        if (!preferences.getBoolean("rotation_enabled", false)) return
+        if (!preferences.getBoolean("rotation_enabled", false) || preferences.getBoolean("live_wallpaper_mode", false)) return
         try {
             val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
             val restartIntent = Intent(this, WallpaperRotationRestartReceiver::class.java)
