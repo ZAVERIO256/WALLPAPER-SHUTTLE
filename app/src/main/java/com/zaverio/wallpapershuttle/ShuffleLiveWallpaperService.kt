@@ -274,7 +274,6 @@ class ShuffleLiveWallpaperService : WallpaperService() {
 
             val options = BitmapFactory.Options().apply {
                 inSampleSize = sampleSize
-                inPreferredConfig = Bitmap.Config.RGB_565
             }
             return contentResolver.openInputStream(uri)?.use {
                 BitmapFactory.decodeStream(it, null, options)
