@@ -1311,7 +1311,7 @@ fun WallpaperShuttleApp(context: Context) {
                         ) {
                             Text("WHAT YOU CAN DO", color = Accent, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             val aboutFeatures = listOf(
-                                "Automatic wallpaper rotation" to "Run continuous rotation using Android’s system-managed live wallpaper engine.",
+                                "Automatic wallpaper rotation" to "Run continuous rotation using Android’s system-managed live wallpaper engine with smooth crossfade transitions.",
                                 "Your own image folders" to "Choose a folder on your device and scan its images, including subfolders.",
                                 "Gallery and random shuffle" to "Preview available pictures and select a random image whenever you like.",
                                 "Wallpaper history" to "Review recently applied wallpapers and select one again.",
@@ -1391,7 +1391,7 @@ fun WallpaperShuttleApp(context: Context) {
                             Text("kdavidtyra@gmail.com", color = Color.White, fontSize = 13.sp)
                             Text("+256 701 303 855", color = Color.White, fontSize = 13.sp)
                             Text("App: Wallpaper Shuttle", color = Color.LightGray, fontSize = 11.sp)
-                            Text("Version 1.9", color = Color.LightGray, fontSize = 11.sp)
+                            Text("Version 1.10", color = Color.LightGray, fontSize = 11.sp)
                         }
                     }
 
