@@ -60,7 +60,17 @@ class ShuffleLiveWallpaperService : WallpaperService() {
                 preferences().getBoolean("live_wallpaper_mode", false)
 
         private fun intervalMillis(): Long {
-            val seconds = preferences().getInt("interval_seconds", 5).coerceIn(5, 86400)
+            val prefs = preferences()
+            val seconds = if (prefs.getBoolean("smart_schedule_enabled", false)) {
+                when (java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)) {
+                    in 5..10 -> 15 * 60
+                    in 11..16 -> 30 * 60
+                    in 17..21 -> 20 * 60
+                    else -> 60 * 60
+                }
+            } else {
+                prefs.getInt("interval_seconds", 5).coerceIn(5, 86400)
+            }
             return TimeUnit.SECONDS.toMillis(seconds.toLong())
         }
 
