@@ -36,6 +36,24 @@ class ShuffleLiveWallpaperService : WallpaperService() {
         private var destroyed = false
         private var surfaceReady = false
 
+        private var lastManualRequest = 0L
+        private val manualRequestTask = object : Runnable {
+            override fun run() {
+                if (destroyed) return
+                if (isVisible && rotationEnabled()) {
+                    val prefs = preferences()
+                    val request = prefs.getLong("manual_change_request", 0L)
+                    if (request != lastManualRequest) {
+                        lastManualRequest = request
+                        val target = prefs.getString("manual_target_uri", null)?.let(Uri::parse)
+                        showNextImage(target)
+                        scheduleNextRotation()
+                    }
+                    handler.postDelayed(this, 600L)
+                }
+            }
+        }
+
         private val fadeTask = object : Runnable {
             override fun run() {
                 if (destroyed || !surfaceReady || previousBitmap == null) return
@@ -71,7 +89,18 @@ class ShuffleLiveWallpaperService : WallpaperService() {
             } else {
                 prefs.getInt("interval_seconds", 5).coerceIn(5, 86400)
             }
-            return TimeUnit.SECONDS.toMillis(seconds.toLong())
+            val batteryIntent = registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+            val level = batteryIntent?.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1) ?: -1
+            val scale = batteryIntent?.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1) ?: -1
+            val plugged = batteryIntent?.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) ?: 0
+            val batteryPercent = if (level >= 0 && scale > 0) (level * 100 / scale) else -1
+            val batteryAdjustedSeconds = if (plugged == 0) when {
+                batteryPercent in 0..15 -> maxOf(seconds, 3600)
+                batteryPercent in 16..25 -> maxOf(seconds, 1800)
+                batteryPercent in 26..35 -> maxOf(seconds, 900)
+                else -> seconds
+            } else seconds
+            return TimeUnit.SECONDS.toMillis(batteryAdjustedSeconds.toLong())
         }
 
         private fun scheduleNextRotation() {
@@ -89,8 +118,11 @@ class ShuffleLiveWallpaperService : WallpaperService() {
         override fun onVisibilityChanged(visible: Boolean) {
             super.onVisibilityChanged(visible)
             handler.removeCallbacks(rotateTask)
+            handler.removeCallbacks(manualRequestTask)
             if (visible && rotationEnabled()) {
                 if (surfaceReady) showNextImage()
+                lastManualRequest = preferences().getLong("manual_change_request", 0L)
+                handler.post(manualRequestTask)
                 scheduleNextRotation()
             } else {
                 preferences().edit()
@@ -178,7 +210,7 @@ class ShuffleLiveWallpaperService : WallpaperService() {
             preferences().edit().putString("last_rotation_status", message).apply()
         }
 
-        private fun showNextImage() {
+        private fun showNextImage(requestedUri: Uri? = null) {
             if (!rotationEnabled()) {
                 setStatus("Rotation is paused")
                 return
@@ -215,12 +247,15 @@ class ShuffleLiveWallpaperService : WallpaperService() {
                 lastUri = prefs.getString("last_image_uri", null)?.let(Uri::parse)
             }
             val candidates = eligible.filter { it != lastUri }.ifEmpty { eligible }
+            val orderedCandidates = if (requestedUri != null && requestedUri in eligible) {
+                listOf(requestedUri) + candidates.filter { it != requestedUri }
+            } else candidates
             // A damaged or temporarily unreadable file should not leave the
             // display stuck: try several different images before giving up.
             var chosen: Uri? = null
             var decoded: Bitmap? = null
             var failedAttempts = 0
-            val attemptCandidates = if (requestedUri != null && candidates.firstOrNull() == requestedUri) candidates.take(minOf(4, candidates.size)) else candidates.shuffled().take(minOf(4, candidates.size))
+            val attemptCandidates = if (requestedUri != null && requestedUri in eligible) orderedCandidates.take(minOf(4, orderedCandidates.size)) else orderedCandidates.shuffled().take(minOf(4, orderedCandidates.size))
             for (candidate in attemptCandidates) {
                 val attempt = try {
                     decodeForWallpaper(candidate)
