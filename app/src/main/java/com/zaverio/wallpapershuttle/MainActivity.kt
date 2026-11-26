@@ -157,6 +157,12 @@ fun WallpaperShuttleApp(context: Context) {
     var imageUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var selectedImage by remember { mutableStateOf<Uri?>(null) }
 
+    var favouriteImages by remember {
+        mutableStateOf(preferences.getStringSet("favourite_images", emptySet())?.toSet() ?: emptySet())
+    }
+    var galleryFilter by remember { mutableStateOf("ALL") }
+    var showImagePreview by remember { mutableStateOf(false) }
+
     var excludedImages by remember {
         mutableStateOf(AppStorage.getExcluded(context))
     }
@@ -753,64 +759,121 @@ fun WallpaperShuttleApp(context: Context) {
                             fontWeight = FontWeight.Bold
                         )
 
+                        val visibleImages = when (galleryFilter) {
+                            "FAVOURITES" -> imageUris.filter { it.toString() in favouriteImages }
+                            "EXCLUDED" -> imageUris.filter { it.toString() in excludedImages }
+                            else -> imageUris.filterNot { it.toString() in excludedImages }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf("ALL", "FAVOURITES", "EXCLUDED").forEach { filter ->
+                                val count = when (filter) {
+                                    "FAVOURITES" -> favouriteImages.size
+                                    "EXCLUDED" -> excludedImages.size
+                                    else -> imageUris.size - excludedImages.size
+                                }
+                                FilterChip(
+                                    selected = galleryFilter == filter,
+                                    onClick = { galleryFilter = filter },
+                                    label = { Text("$filter  $count", fontSize = 11.sp) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = Accent.copy(alpha = 0.22f),
+                                        selectedLabelColor = Accent
+                                    )
+                                )
+                            }
+                        }
+
                         if (imageUris.isEmpty()) {
+                            Text("Choose an image folder above to build your collection.", color = MutedText)
+                        } else if (visibleImages.isEmpty()) {
                             Text(
-                                "Select a folder to display your pictures.",
-                                color = Color.LightGray
+                                if (galleryFilter == "FAVOURITES") "No favourites yet. Tap the star on any image to save it."
+                                else if (galleryFilter == "EXCLUDED") "No excluded images."
+                                else "No images to show.",
+                                color = MutedText,
+                                fontSize = 13.sp
                             )
                         } else {
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                imageUris.chunked(3).forEach { imageRow ->
+                            Text(
+                                "${visibleImages.size} images shown • Tap a photo to preview",
+                                color = MutedText,
+                                fontSize = 12.sp
+                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                visibleImages.chunked(2).forEach { imageRow ->
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
                                         imageRow.forEach { uri ->
                                             val isSelected = uri == selectedImage
-
+                                            val isFavourite = uri.toString() in favouriteImages
                                             Box(
                                                 modifier = Modifier
                                                     .weight(1f)
-                                                    .height(112.dp)
-                                                    .clip(RoundedCornerShape(12.dp))
+                                                    .height(174.dp)
+                                                    .clip(RoundedCornerShape(18.dp))
                                                     .border(
-                                                        width = if (isSelected) 3.dp else 1.dp,
-                                                        color = if (isSelected) Accent
-                                                        else Color(0xFF344055),
-                                                        shape = RoundedCornerShape(12.dp)
+                                                        width = if (isSelected) 2.dp else 1.dp,
+                                                        color = if (isSelected) Accent else Color.White.copy(alpha = 0.10f),
+                                                        shape = RoundedCornerShape(18.dp)
                                                     )
                                                     .clickable {
                                                         selectedImage = uri
+                                                        showImagePreview = true
                                                         statusMessage = "Image selected."
                                                     }
                                             ) {
                                                 AsyncImage(
                                                     model = uri,
-                                                    contentDescription = "Gallery image",
+                                                    contentDescription = "Wallpaper photo",
                                                     modifier = Modifier.fillMaxSize(),
                                                     contentScale = ContentScale.Crop
                                                 )
+                                                Box(
+                                                    modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter)
+                                                        .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.62f), Color.Transparent)))
+                                                        .padding(9.dp)
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        if (isSelected) {
+                                                            Text("SELECTED", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                                        } else {
+                                                            Spacer(Modifier.width(1.dp))
+                                                        }
+                                                        Surface(
+                                                            onClick = {
+                                                                val updated = favouriteImages.toMutableSet()
+                                                                if (isFavourite) updated.remove(uri.toString()) else updated.add(uri.toString())
+                                                                favouriteImages = updated
+                                                                preferences.edit().putStringSet("favourite_images", updated).apply()
+                                                            },
+                                                            shape = RoundedCornerShape(50),
+                                                            color = Color.Black.copy(alpha = 0.48f)
+                                                        ) {
+                                                            Text(
+                                                                if (isFavourite) "★" else "☆",
+                                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                                                color = if (isFavourite) Color(0xFFFFD166) else Color.White,
+                                                                fontSize = 18.sp
+                                                            )
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
-
-                                        repeat(3 - imageRow.size) {
-                                            Spacer(
-                                                modifier = Modifier
-                                                    .weight(1f)
-                                                    .height(112.dp)
-                                            )
-                                        }
+                                        if (imageRow.size == 1) Spacer(Modifier.weight(1f))
                                     }
                                 }
                             }
-
-                            Text(
-                                "Tap a picture to select it.",
-                                color = Color.LightGray,
-                                fontSize = 12.sp
-                            )
                         }
                     }
                 }
@@ -1017,6 +1080,52 @@ fun WallpaperShuttleApp(context: Context) {
                 }
 
                 }
+                if (showImagePreview && selectedImage != null) {
+                    androidx.compose.ui.window.Dialog(
+                        onDismissRequest = { showImagePreview = false },
+                        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxSize().background(Color(0xFF050811)).padding(16.dp),
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("WALLPAPER PREVIEW", color = Color.White, fontWeight = FontWeight.Bold)
+                                TextButton(onClick = { showImagePreview = false }) { Text("CLOSE", color = Accent) }
+                            }
+                            AsyncImage(
+                                model = selectedImage,
+                                contentDescription = "Full screen wallpaper preview",
+                                modifier = Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(18.dp)),
+                                contentScale = ContentScale.Fit
+                            )
+                            Spacer(Modifier.height(14.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                OutlinedButton(
+                                    onClick = {
+                                        selectedImage?.let { uri ->
+                                            val updated = favouriteImages.toMutableSet()
+                                            if (uri.toString() in updated) updated.remove(uri.toString()) else updated.add(uri.toString())
+                                            favouriteImages = updated
+                                            preferences.edit().putStringSet("favourite_images", updated).apply()
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) { Text(if (selectedImage?.toString() in favouriteImages) "★ SAVED" else "☆ FAVOURITE") }
+                                Button(
+                                    onClick = { selectedImage?.let { applyWallpaper(it) }; showImagePreview = false },
+                                    modifier = Modifier.weight(1f),
+                                    enabled = !isApplying
+                                ) { Text("APPLY") }
+                            }
+                        }
+                    }
+                }
+
                 if (selectedTab == 2) {
                 // DESTINATION
                 Card(
