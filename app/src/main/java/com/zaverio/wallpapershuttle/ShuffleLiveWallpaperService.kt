@@ -9,6 +9,7 @@ import android.graphics.RectF
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
 import androidx.documentfile.provider.DocumentFile
@@ -25,12 +26,23 @@ class ShuffleLiveWallpaperService : WallpaperService() {
         private val handler = Handler(Looper.getMainLooper())
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
         private var bitmap: Bitmap? = null
+        private var previousBitmap: Bitmap? = null
+        private var transitionStartedAt = 0L
+        private val transitionDurationMs = 650L
         private var imageUris: List<Uri> = emptyList()
         private var lastUri: Uri? = null
         private var surfaceWidth = 0
         private var surfaceHeight = 0
         private var destroyed = false
         private var surfaceReady = false
+
+        private val fadeTask = object : Runnable {
+            override fun run() {
+                if (destroyed || !surfaceReady || previousBitmap == null) return
+                drawFrame()
+                if (previousBitmap != null) handler.postDelayed(this, 16L)
+            }
+        }
 
         private val rotateTask = object : Runnable {
             override fun run() {
@@ -115,7 +127,9 @@ class ShuffleLiveWallpaperService : WallpaperService() {
             surfaceReady = false
             handler.removeCallbacksAndMessages(null)
             bitmap?.recycle()
+            previousBitmap?.recycle()
             bitmap = null
+            previousBitmap = null
             super.onDestroy()
         }
 
@@ -202,10 +216,12 @@ class ShuffleLiveWallpaperService : WallpaperService() {
                 return
             }
 
-            val old = bitmap
+            handler.removeCallbacks(fadeTask)
+            previousBitmap?.recycle()
+            previousBitmap = bitmap
             bitmap = decoded
+            transitionStartedAt = SystemClock.uptimeMillis()
             lastUri = chosen
-            old?.recycle()
 
             prefs.edit()
                 .putString("last_image_uri", chosen.toString())
@@ -213,6 +229,29 @@ class ShuffleLiveWallpaperService : WallpaperService() {
                 .putString("last_rotation_status", "Live wallpaper image changed successfully")
                 .apply()
             drawFrame()
+        }
+
+        private fun drawImage(canvas: Canvas, image: Bitmap, alpha: Int) {
+            val mode = preferences().getString("display_mode", "crop") ?: "crop"
+            val scaleX = surfaceWidth.toFloat() / image.width.coerceAtLeast(1)
+            val scaleY = surfaceHeight.toFloat() / image.height.coerceAtLeast(1)
+            val scale = when (mode) {
+                "fit" -> minOf(scaleX, scaleY)
+                "stretch" -> 0f
+                else -> maxOf(scaleX, scaleY)
+            }
+            val destination = if (mode == "stretch") {
+                RectF(0f, 0f, surfaceWidth.toFloat(), surfaceHeight.toFloat())
+            } else {
+                val width = image.width * scale
+                val height = image.height * scale
+                val left = (surfaceWidth - width) / 2f
+                val top = (surfaceHeight - height) / 2f
+                RectF(left, top, left + width, top + height)
+            }
+            paint.alpha = alpha.coerceIn(0, 255)
+            canvas.drawBitmap(image, null, destination, paint)
+            paint.alpha = 255
         }
 
         private fun drawFrame() {
@@ -224,24 +263,21 @@ class ShuffleLiveWallpaperService : WallpaperService() {
                 canvas = holder.lockCanvas()
                 if (canvas != null) {
                     canvas.drawColor(Color.BLACK)
-                    val mode = preferences().getString("display_mode", "crop") ?: "crop"
-                    val scaleX = surfaceWidth.toFloat() / image.width.coerceAtLeast(1)
-                    val scaleY = surfaceHeight.toFloat() / image.height.coerceAtLeast(1)
-                    val scale = when (mode) {
-                        "fit" -> minOf(scaleX, scaleY)
-                        "stretch" -> 0f
-                        else -> maxOf(scaleX, scaleY)
-                    }
-                    val destination = if (mode == "stretch") {
-                        RectF(0f, 0f, surfaceWidth.toFloat(), surfaceHeight.toFloat())
+                    val old = previousBitmap
+                    val elapsed = SystemClock.uptimeMillis() - transitionStartedAt
+                    val progress = if (old == null) 1f
+                        else (elapsed.toFloat() / transitionDurationMs).coerceIn(0f, 1f)
+                    if (old != null && progress < 1f) {
+                        drawImage(canvas, old, 255)
+                        drawImage(canvas, image, (progress * 255).toInt())
                     } else {
-                        val width = image.width * scale
-                        val height = image.height * scale
-                        val left = (surfaceWidth - width) / 2f
-                        val top = (surfaceHeight - height) / 2f
-                        RectF(left, top, left + width, top + height)
+                        drawImage(canvas, image, 255)
+                        if (old != null) {
+                            previousBitmap = null
+                            old.recycle()
+                            handler.removeCallbacks(fadeTask)
+                        }
                     }
-                    canvas.drawBitmap(image, null, destination, paint)
                 }
             } catch (_: Exception) {
                 setStatus("Wallpaper display surface is temporarily unavailable")
