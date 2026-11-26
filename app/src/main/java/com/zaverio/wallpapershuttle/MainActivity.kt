@@ -246,6 +246,7 @@ fun WallpaperShuttleApp(context: Context) {
     LaunchedEffect(rotationRunning) {
         if (rotationRunning &&
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !preferences.getBoolean("live_wallpaper_mode", false) &&
             ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.POST_NOTIFICATIONS
