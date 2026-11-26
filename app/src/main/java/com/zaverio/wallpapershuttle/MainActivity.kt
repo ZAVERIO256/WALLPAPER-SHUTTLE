@@ -191,6 +191,9 @@ fun WallpaperShuttleApp(context: Context) {
         )
     }
     var intervalMenuExpanded by remember { mutableStateOf(false) }
+    var smartScheduleEnabled by remember {
+        mutableStateOf(preferences.getBoolean("smart_schedule_enabled", false))
+    }
 
     var destination by remember {
         mutableIntStateOf(
@@ -1403,6 +1406,52 @@ fun WallpaperShuttleApp(context: Context) {
                             fontSize = 12.sp
                         )
 
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1B2940)),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("SMART DAILY SCHEDULE", color = Color.White, fontWeight = FontWeight.Bold)
+                                        Text("Automatically adapt the interval to the time of day", color = MutedText, fontSize = 11.sp)
+                                    }
+                                    Switch(
+                                        checked = smartScheduleEnabled,
+                                        onCheckedChange = { enabled ->
+                                            smartScheduleEnabled = enabled
+                                            preferences.edit().putBoolean("smart_schedule_enabled", enabled).apply()
+                                            statusMessage = if (enabled) "Smart daily schedule enabled." else "Using your fixed rotation interval."
+                                        }
+                                    )
+                                }
+                                if (smartScheduleEnabled) {
+                                    listOf(
+                                        "Morning • 5 AM–11 AM" to "Every 15 minutes",
+                                        "Afternoon • 11 AM–5 PM" to "Every 30 minutes",
+                                        "Evening • 5 PM–10 PM" to "Every 20 minutes",
+                                        "Night • 10 PM–5 AM" to "Every 1 hour"
+                                    ).forEach { item ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(item.first, color = Color.White, fontSize = 11.sp)
+                                            Text(item.second, color = AccentMint, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                        }
+                                    }
+                                    Text("Your selected fixed interval remains saved and is used whenever Smart Schedule is off.", color = MutedText, fontSize = 10.sp)
+                                }
+                            }
+                        }
+
                         Button(
                             onClick = { startRotation() },
                             enabled = !rotationRunning && imageUris.isNotEmpty(),
@@ -1599,7 +1648,7 @@ fun WallpaperShuttleApp(context: Context) {
                             Text("kdavidtyra@gmail.com", color = Color.White, fontSize = 13.sp)
                             Text("+256 701 303 855", color = Color.White, fontSize = 13.sp)
                             Text("App: Wallpaper Shuttle", color = Color.LightGray, fontSize = 11.sp)
-                            Text("Version 1.14", color = Color.LightGray, fontSize = 11.sp)
+                            Text("Version 1.15", color = Color.LightGray, fontSize = 11.sp)
                         }
                     }
 
