@@ -290,6 +290,7 @@ class ShuffleLiveWallpaperService : WallpaperService() {
             prefs.edit()
                 .putString("last_image_uri", selectedUri.toString())
                 .putLong("last_rotation_time", System.currentTimeMillis())
+                .putInt("total_rotation_count", prefs.getInt("total_rotation_count", 0) + 1)
                 .putInt("unreadable_image_count", prefs.getInt("unreadable_image_count", 0) + failedAttempts)
                 .putString(
                     "last_rotation_status",
