@@ -41,6 +41,8 @@ import androidx.documentfile.provider.DocumentFile
 import coil.compose.AsyncImage
 import java.util.concurrent.Executors
 import kotlinx.coroutines.delay
+import org.json.JSONArray
+import org.json.JSONObject
 
 private val DarkBackground = Color(0xFF090E1A)
 private val CardBackground = Color(0xFF151F31)
@@ -219,6 +221,8 @@ fun WallpaperShuttleApp(context: Context) {
         )
     }
 
+    var backupMessage by remember { mutableStateOf<String?>(null) }
+
     var statusMessage by remember {
         mutableStateOf(
             preferences.getString("last_rotation_status", null)
@@ -340,6 +344,66 @@ fun WallpaperShuttleApp(context: Context) {
         }
     }
 
+    val backupExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val backup = JSONObject()
+                    .put("format", "wallpaper-shuttle-backup")
+                    .put("version", 1)
+                    .put("created_at", System.currentTimeMillis())
+                    .put("favourites", JSONArray(favouriteImages.toList()))
+                    .put("excluded", JSONArray(excludedImages.toList()))
+                    .put("history", JSONArray(preferences.getString("wallpaper_history", "[]")))
+                    .put("interval_seconds", intervalSeconds)
+                    .put("smart_schedule_enabled", smartScheduleEnabled)
+                    .put("destination", destination)
+                    .put("display_mode", displayMode)
+                context.contentResolver.openOutputStream(uri)?.use { it.write(backup.toString(2).toByteArray(Charsets.UTF_8)) }
+                    ?: throw IllegalStateException("Could not open backup file")
+                backupMessage = "Backup saved successfully. Keep the file somewhere safe."
+            } catch (error: Exception) { backupMessage = "Backup failed: ${error.message ?: "unknown error"}" }
+        }
+    }
+
+    val backupImportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val raw = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    ?: throw IllegalStateException("Could not read the selected file")
+                val backup = JSONObject(raw)
+                require(backup.optString("format") == "wallpaper-shuttle-backup") { "Not a Wallpaper Shuttle backup" }
+                require(backup.optInt("version", -1) == 1) { "Unsupported backup version" }
+                val favArray = backup.optJSONArray("favourites") ?: JSONArray()
+                val excArray = backup.optJSONArray("excluded") ?: JSONArray()
+                val favs = (0 until favArray.length()).map { favArray.optString(it) }.filter { it.isNotBlank() }.toSet()
+                val excluded = (0 until excArray.length()).map { excArray.optString(it) }.filter { it.isNotBlank() }.toSet()
+                val restoredInterval = backup.optInt("interval_seconds", 5).coerceIn(5, 86400)
+                val restoredDestination = backup.optInt("destination", WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK)
+                    .let { if (it == WallpaperManager.FLAG_SYSTEM || it == WallpaperManager.FLAG_LOCK || it == (WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK)) it else WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK }
+                val restoredMode = backup.optString("display_mode", "crop").takeIf { it == "crop" || it == "fit" || it == "stretch" } ?: "crop"
+                preferences.edit().putStringSet("favourite_images", HashSet(favs))
+                    .putStringSet("excluded_uris", HashSet(excluded))
+                    .putString("wallpaper_history", backup.optJSONArray("history")?.toString() ?: "[]")
+                    .putInt("interval_seconds", restoredInterval)
+                    .putBoolean("smart_schedule_enabled", backup.optBoolean("smart_schedule_enabled", false))
+                    .putInt("destination", restoredDestination).putString("display_mode", restoredMode)
+                    .putLong("schedule_refresh_request", System.currentTimeMillis()).apply()
+                favouriteImages = favs
+                excludedImages = excluded
+                historyEntries = AppStorage.getHistory(context)
+                intervalSeconds = restoredInterval
+                smartScheduleEnabled = backup.optBoolean("smart_schedule_enabled", false)
+                destination = restoredDestination
+                displayMode = restoredMode
+                selectedImage = null
+                backupMessage = "Backup restored. Re-select your wallpaper folder if needed. Rotation remains paused until you start it."
+            } catch (error: Exception) { backupMessage = "Restore failed: ${error.message ?: "invalid backup"}" }
+        }
+    }
     val folderName = selectedFolder?.let {
         DocumentFile.fromTreeUri(context, it)?.name
     } ?: "No folder selected"
@@ -1190,8 +1254,21 @@ fun WallpaperShuttleApp(context: Context) {
                     }
                 }
 
-                // DESTINATION
-                Card(
+                // BACKUP & RESTORE
+                Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = CardBackground), shape = RoundedCornerShape(20.dp)) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("BACKUP & RESTORE", color = Accent, fontWeight = FontWeight.Bold)
+                        Text("Save favourites, exclusions, wallpaper history, rotation schedule, destination and display mode in one portable file.", color = Color.LightGray, fontSize = 12.sp, lineHeight = 18.sp)
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Button(onClick = { backupExportLauncher.launch("Wallpaper-Shuttle-Backup.json") }, modifier = Modifier.weight(1f)) { Text("EXPORT") }
+                            OutlinedButton(onClick = { backupImportLauncher.launch(arrayOf("application/json", "text/*")) }, modifier = Modifier.weight(1f)) { Text("RESTORE") }
+                        }
+                        Text("Android folder permission is not transferable. After restoring on another phone or installation, select your wallpaper folder again. Rotation will not start automatically.", color = MutedText, fontSize = 11.sp, lineHeight = 16.sp)
+                        backupMessage?.let { Text(it, color = AccentMint, fontSize = 12.sp, lineHeight = 17.sp) }
+                    }
+                }
+
+                // DESTINATION                Card(
                     colors = CardDefaults.cardColors(
                         containerColor = CardBackground
                     ),
@@ -1709,7 +1786,7 @@ fun WallpaperShuttleApp(context: Context) {
                             Text("kdavidtyra@gmail.com", color = Color.White, fontSize = 13.sp)
                             Text("+256 701 303 855", color = Color.White, fontSize = 13.sp)
                             Text("App: Wallpaper Shuttle", color = Color.LightGray, fontSize = 11.sp)
-                            Text("Version 1.18", color = Color.LightGray, fontSize = 11.sp)
+                            Text("Version 1.19", color = Color.LightGray, fontSize = 11.sp)
                         }
                     }
 
