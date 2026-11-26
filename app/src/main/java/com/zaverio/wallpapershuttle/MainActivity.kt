@@ -1437,6 +1437,7 @@ fun WallpaperShuttleApp(context: Context) {
                                                 preferences.edit()
                                                     .putInt("interval_seconds", seconds)
                                                     .putLong("next_rotation_time", nextChangeAt)
+                                                    .putLong("schedule_refresh_request", System.currentTimeMillis())
                                                     .commit()
 
                                                 try {
@@ -1487,7 +1488,7 @@ fun WallpaperShuttleApp(context: Context) {
                                         checked = smartScheduleEnabled,
                                         onCheckedChange = { enabled ->
                                             smartScheduleEnabled = enabled
-                                            preferences.edit().putBoolean("smart_schedule_enabled", enabled).apply()
+                                            preferences.edit().putBoolean("smart_schedule_enabled", enabled).putLong("schedule_refresh_request", System.currentTimeMillis()).apply()
                                             statusMessage = if (enabled) "Smart daily schedule enabled." else "Using your fixed rotation interval."
                                         }
                                     )
@@ -1708,7 +1709,7 @@ fun WallpaperShuttleApp(context: Context) {
                             Text("kdavidtyra@gmail.com", color = Color.White, fontSize = 13.sp)
                             Text("+256 701 303 855", color = Color.White, fontSize = 13.sp)
                             Text("App: Wallpaper Shuttle", color = Color.LightGray, fontSize = 11.sp)
-                            Text("Version 1.17", color = Color.LightGray, fontSize = 11.sp)
+                            Text("Version 1.18", color = Color.LightGray, fontSize = 11.sp)
                         }
                     }
 
