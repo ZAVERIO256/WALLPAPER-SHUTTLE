@@ -1311,7 +1311,7 @@ fun WallpaperShuttleApp(context: Context) {
                         ) {
                             Text("WHAT YOU CAN DO", color = Accent, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             val aboutFeatures = listOf(
-                                "Automatic wallpaper rotation" to "Run continuous user-started rotation through an ongoing foreground service.",
+                                "Automatic wallpaper rotation" to "Run continuous rotation using Android’s system-managed live wallpaper engine.",
                                 "Your own image folders" to "Choose a folder on your device and scan its images, including subfolders.",
                                 "Gallery and random shuffle" to "Preview available pictures and select a random image whenever you like.",
                                 "Wallpaper history" to "Review recently applied wallpapers and select one again.",
@@ -1369,7 +1369,7 @@ fun WallpaperShuttleApp(context: Context) {
                             HorizontalDivider(color = Color(0xFF344055))
                             Text("DISPLAY MODES", color = Accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             Text("Crop fills the display edge-to-edge while preserving proportions, trimming excess edges when needed. Fit shows the entire original image but can leave black space. Stretch fills the display but may distort the picture.", color = Color.LightGray, fontSize = 12.sp, lineHeight = 19.sp)
-                            Text("Automatic rotation uses an ongoing silent notification and a foreground service. A service watchdog checks for missed rotation cycles and wallpaper changes that remain stuck for 90 seconds, then replaces the worker thread and resumes rotation when possible. For intervals up to 5 minutes, the app keeps the CPU awake so changes can happen while the screen is off. This can noticeably increase battery use. Android and Infinix XOS can still stop background activity under strict power restrictions. Allow battery optimisation exemption, enable XOS Auto-start and lock the app in Recent Apps. Force stop always disables it until you open the app again.", color = Color(0xFFB7C8FF), fontSize = 11.sp, lineHeight = 17.sp)
+                            Text("Automatic rotation runs through Android’s system-managed live wallpaper engine, so it is not dependent on keeping this app open. Rotation happens while the wallpaper is visible; Android may pause it when the display is off and show a fresh image when the screen becomes visible again. The engine refreshes your selected folder, remembers the last image, recovers its timer after wallpaper surface recreation, and records useful status information. Lock-screen live wallpaper support depends on your Android version and device manufacturer. Force stop can still stop wallpaper activity until you reopen the app.", color = Color(0xFFB7C8FF), fontSize = 11.sp, lineHeight = 17.sp)
                         }
                     }
 
@@ -1391,7 +1391,7 @@ fun WallpaperShuttleApp(context: Context) {
                             Text("kdavidtyra@gmail.com", color = Color.White, fontSize = 13.sp)
                             Text("+256 701 303 855", color = Color.White, fontSize = 13.sp)
                             Text("App: Wallpaper Shuttle", color = Color.LightGray, fontSize = 11.sp)
-                            Text("Version 1.6", color = Color.LightGray, fontSize = 11.sp)
+                            Text("Version 1.9", color = Color.LightGray, fontSize = 11.sp)
                         }
                     }
 
