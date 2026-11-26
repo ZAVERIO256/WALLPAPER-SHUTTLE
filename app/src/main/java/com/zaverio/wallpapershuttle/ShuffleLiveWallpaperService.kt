@@ -6,17 +6,17 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
 import androidx.documentfile.provider.DocumentFile
-import android.net.Uri
 import java.util.concurrent.TimeUnit
 
 /**
- * System-managed live wallpaper renderer. The OS owns this service while it
- * is the selected wallpaper, so rotation is not tied to MainActivity's life.
+ * System-managed live wallpaper renderer. Android owns this service while it
+ * is selected as the active wallpaper, independently of MainActivity.
  */
 class ShuffleLiveWallpaperService : WallpaperService() {
     override fun onCreateEngine(): Engine = RotationEngine()
@@ -30,44 +30,89 @@ class ShuffleLiveWallpaperService : WallpaperService() {
         private var surfaceWidth = 0
         private var surfaceHeight = 0
         private var destroyed = false
+        private var surfaceReady = false
 
         private val rotateTask = object : Runnable {
             override fun run() {
-                if (destroyed || !isVisible || !rotationEnabled()) return
+                if (destroyed || !surfaceReady || !isVisible || !rotationEnabled()) return
                 showNextImage()
-                val seconds = preferences().getInt("interval_seconds", 5).coerceIn(5, 86400)
-                handler.postDelayed(this, TimeUnit.SECONDS.toMillis(seconds.toLong()))
+                scheduleNextRotation()
             }
         }
 
-        private fun preferences() = getSharedPreferences("shuffle_wallpaper", MODE_PRIVATE)
+        private fun preferences() =
+            getSharedPreferences("shuffle_wallpaper", MODE_PRIVATE)
 
-        private fun rotationEnabled() = preferences().getBoolean("rotation_enabled", false)
+        private fun rotationEnabled() =
+            preferences().getBoolean("rotation_enabled", false) &&
+                preferences().getBoolean("live_wallpaper_mode", false)
+
+        private fun intervalMillis(): Long {
+            val seconds = preferences().getInt("interval_seconds", 5).coerceIn(5, 86400)
+            return TimeUnit.SECONDS.toMillis(seconds.toLong())
+        }
+
+        private fun scheduleNextRotation() {
+            handler.removeCallbacks(rotateTask)
+            if (!destroyed && surfaceReady && isVisible && rotationEnabled()) {
+                val nextAt = System.currentTimeMillis() + intervalMillis()
+                preferences().edit()
+                    .putLong("next_rotation_time", nextAt)
+                    .putString("last_rotation_status", "Live wallpaper is active")
+                    .apply()
+                handler.postDelayed(rotateTask, intervalMillis())
+            }
+        }
 
         override fun onVisibilityChanged(visible: Boolean) {
             super.onVisibilityChanged(visible)
             handler.removeCallbacks(rotateTask)
             if (visible && rotationEnabled()) {
-                showNextImage()
-                val seconds = preferences().getInt("interval_seconds", 5).coerceIn(5, 86400)
-                handler.postDelayed(rotateTask, TimeUnit.SECONDS.toMillis(seconds.toLong()))
+                if (surfaceReady) showNextImage()
+                scheduleNextRotation()
+            } else {
+                preferences().edit()
+                    .putLong("next_rotation_time", 0L)
+                    .putString(
+                        "last_rotation_status",
+                        if (!rotationEnabled()) "Rotation is paused" else "Wallpaper is waiting until the screen is visible"
+                    )
+                    .apply()
             }
         }
 
-        override fun onSurfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+        override fun onSurfaceChanged(
+            holder: SurfaceHolder,
+            format: Int,
+            width: Int,
+            height: Int
+        ) {
             super.onSurfaceChanged(holder, format, width, height)
             surfaceWidth = width
             surfaceHeight = height
-            drawFrame()
+            surfaceReady = width > 0 && height > 0 && holder.surface?.isValid == true
+            if (surfaceReady) {
+                if (bitmap == null && isVisible && rotationEnabled()) showNextImage()
+                else drawFrame()
+                // Surface recreation must restart the timer; otherwise a
+                // destroyed surface could leave rotation permanently stalled.
+                scheduleNextRotation()
+            }
         }
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
+            surfaceReady = false
             handler.removeCallbacks(rotateTask)
+            preferences().edit()
+                .putLong("next_rotation_time", 0L)
+                .putString("last_rotation_status", "Wallpaper surface is being recreated")
+                .apply()
             super.onSurfaceDestroyed(holder)
         }
 
         override fun onDestroy() {
             destroyed = true
+            surfaceReady = false
             handler.removeCallbacksAndMessages(null)
             bitmap?.recycle()
             bitmap = null
@@ -80,50 +125,99 @@ class ShuffleLiveWallpaperService : WallpaperService() {
             pending.add(root)
             while (pending.isNotEmpty()) {
                 val folder = pending.removeFirst()
-                val children = try { folder.listFiles() } catch (_: Exception) { emptyArray() }
+                val children = try {
+                    folder.listFiles()
+                } catch (_: Exception) {
+                    emptyArray()
+                }
                 for (file in children) {
                     try {
                         if (file.isDirectory) pending.add(file)
                         else if (file.isFile && (
                             file.type?.startsWith("image/", true) == true ||
-                            file.name?.lowercase()?.let { name ->
-                                listOf(".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif").any(name::endsWith)
-                            } == true
-                        )) found.add(file.uri)
-                    } catch (_: Exception) { }
+                                file.name?.lowercase()?.let { name ->
+                                    listOf(".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif")
+                                        .any(name::endsWith)
+                                } == true
+                            )
+                        ) found.add(file.uri)
+                    } catch (_: Exception) {
+                        // Ignore individual files that disappear or become inaccessible.
+                    }
                 }
             }
             return found
         }
 
+        private fun setStatus(message: String) {
+            preferences().edit().putString("last_rotation_status", message).apply()
+        }
+
         private fun showNextImage() {
-            if (!rotationEnabled()) return
+            if (!rotationEnabled()) {
+                setStatus("Rotation is paused")
+                return
+            }
+
             val prefs = preferences()
-            val folderString = prefs.getString("folder_uri", null) ?: return
-            val root = DocumentFile.fromTreeUri(this@ShuffleLiveWallpaperService, Uri.parse(folderString)) ?: return
-            if (imageUris.isEmpty()) imageUris = findImages(root)
+            val folderString = prefs.getString("folder_uri", null)
+            if (folderString.isNullOrBlank()) {
+                setStatus("Choose a wallpaper folder in the app")
+                return
+            }
+
+            val root = try {
+                DocumentFile.fromTreeUri(this@ShuffleLiveWallpaperService, Uri.parse(folderString))
+            } catch (_: Exception) {
+                null
+            }
+            if (root == null || !root.canRead()) {
+                setStatus("Folder access is unavailable. Re-select the folder in the app")
+                return
+            }
+
+            // Refresh the folder list each cycle so newly added and removed
+            // pictures are reflected without reopening the app.
+            imageUris = findImages(root)
             val excluded = prefs.getStringSet("excluded_uris", emptySet())?.toSet() ?: emptySet()
             val eligible = imageUris.filterNot { it.toString() in excluded }
-            if (eligible.isEmpty()) return
+            if (eligible.isEmpty()) {
+                setStatus(if (imageUris.isEmpty()) "No supported images found in the selected folder" else "All images are excluded")
+                return
+            }
+
+            if (lastUri == null) {
+                lastUri = prefs.getString("last_image_uri", null)?.let(Uri::parse)
+            }
             val candidates = eligible.filter { it != lastUri }.ifEmpty { eligible }
             val chosen = candidates.random()
             val decoded = try {
                 contentResolver.openInputStream(chosen)?.use { BitmapFactory.decodeStream(it) }
-            } catch (_: Exception) { null } ?: return
+            } catch (_: Exception) {
+                null
+            }
+
+            if (decoded == null) {
+                setStatus("Could not read an image. Will try another on the next rotation")
+                return
+            }
+
             val old = bitmap
             bitmap = decoded
             lastUri = chosen
             old?.recycle()
+
             prefs.edit()
                 .putString("last_image_uri", chosen.toString())
                 .putLong("last_rotation_time", System.currentTimeMillis())
                 .putString("last_rotation_status", "Live wallpaper image changed successfully")
-                .commit()
+                .apply()
             drawFrame()
         }
 
         private fun drawFrame() {
             val image = bitmap ?: return
+            if (!surfaceReady) return
             val holder = surfaceHolder
             var canvas: Canvas? = null
             try {
@@ -150,9 +244,14 @@ class ShuffleLiveWallpaperService : WallpaperService() {
                     canvas.drawBitmap(image, null, destination, paint)
                 }
             } catch (_: Exception) {
+                setStatus("Wallpaper display surface is temporarily unavailable")
             } finally {
                 if (canvas != null) {
-                    try { holder.unlockCanvasAndPost(canvas) } catch (_: Exception) { }
+                    try {
+                        holder.unlockCanvasAndPost(canvas)
+                    } catch (_: Exception) {
+                        // Surface may have been destroyed while drawing.
+                    }
                 }
             }
         }
