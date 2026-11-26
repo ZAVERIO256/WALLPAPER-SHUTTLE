@@ -545,6 +545,23 @@ fun WallpaperShuttleApp(context: Context) {
                                 )
                             }
 
+                            val imageQualityInfo = preferences.getString("last_image_quality", null)
+                            if (!imageQualityInfo.isNullOrBlank()) {
+                                Text(
+                                    "Image loading: $imageQualityInfo",
+                                    color = Color.LightGray,
+                                    fontSize = 11.sp
+                                )
+                            }
+                            val unreadableImages = preferences.getInt("unreadable_image_count", 0)
+                            if (unreadableImages > 0) {
+                                Text(
+                                    "Unreadable images skipped: $unreadableImages",
+                                    color = Color(0xFFFFC27A),
+                                    fontSize = 11.sp
+                                )
+                            }
+
                             Text(
                                 if (rotationRunning) "Automatic rotation is active"
                                 else "Automatic rotation is paused",
@@ -1311,7 +1328,7 @@ fun WallpaperShuttleApp(context: Context) {
                         ) {
                             Text("WHAT YOU CAN DO", color = Accent, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             val aboutFeatures = listOf(
-                                "Automatic wallpaper rotation" to "Run continuous rotation using Android’s system-managed live wallpaper engine with smooth crossfade transitions and memory-aware image decoding.",
+                                "Automatic wallpaper rotation" to "Run continuous rotation using Android’s system-managed live wallpaper engine with smooth crossfades, memory-aware image decoding and recovery from unreadable photos.",
                                 "Your own image folders" to "Choose a folder on your device and scan its images, including subfolders.",
                                 "Gallery and random shuffle" to "Preview available pictures and select a random image whenever you like.",
                                 "Wallpaper history" to "Review recently applied wallpapers and select one again.",
