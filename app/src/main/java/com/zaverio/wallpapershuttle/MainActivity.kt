@@ -1190,8 +1190,11 @@ fun WallpaperShuttleApp(context: Context) {
                         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
                     ) {
                         Column(
-                            modifier = Modifier.fillMaxSize().background(Color(0xFF050811)).padding(16.dp),
-                            verticalArrangement = Arrangement.Center
+                            modifier = Modifier.fillMaxSize()
+                                .background(Color(0xFF050811))
+                                .windowInsetsPadding(WindowInsets.safeDrawing)
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
