@@ -287,13 +287,47 @@ class ShuffleLiveWallpaperService : WallpaperService() {
                 failedAttempts++
             }
 
-            val newBitmap = decoded
-            val selectedUri = chosen
+            var newBitmap = decoded
+            var selectedUri = chosen
+
+            // If every newly selected file fails, recover the last known-good
+            // wallpaper URI. Android may recreate this engine after memory
+            // pressure or while the device is waking; do not leave a blank
+            // surface just because the next random file is temporarily unreadable.
+            if (newBitmap == null || selectedUri == null) {
+                val lastKnownUri = prefs.getString("last_image_uri", null)
+                    ?.let { runCatching { Uri.parse(it) }.getOrNull() }
+                if (lastKnownUri != null) {
+                    val recovered = runCatching { decodeForWallpaper(lastKnownUri) }.getOrNull()
+                    if (recovered != null) {
+                        newBitmap = recovered
+                        selectedUri = lastKnownUri
+                    }
+                }
+            }
+
             if (newBitmap == null || selectedUri == null) {
                 prefs.edit()
                     .putInt("unreadable_image_count", prefs.getInt("unreadable_image_count", 0) + failedAttempts)
-                    .putString("last_rotation_status", "Could not read the selected images. Previous wallpaper kept; will retry later")
+                    .putString(
+                        "last_rotation_status",
+                        if (bitmap != null) "New images could not be read. Keeping the current wallpaper and retrying"
+                        else "Images are temporarily unavailable. Re-select the folder if this continues"
+                    )
                     .apply()
+                return
+            }
+
+            // If the engine has no in-memory frame yet, show the recovered
+            // image immediately rather than starting a transition from black.
+            if (bitmap == null) {
+                bitmap = newBitmap
+                lastUri = selectedUri
+                prefs.edit()
+                    .putString("last_image_uri", selectedUri.toString())
+                    .putString("last_rotation_status", "Previous wallpaper restored")
+                    .apply()
+                drawFrame()
                 return
             }
 
