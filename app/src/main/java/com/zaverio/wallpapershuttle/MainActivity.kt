@@ -1174,32 +1174,47 @@ fun WallpaperShuttleApp(context: Context) {
                                 Text("WALLPAPER PREVIEW", color = Color.White, fontWeight = FontWeight.Bold)
                                 TextButton(onClick = { showImagePreview = false }) { Text("CLOSE", color = Accent) }
                             }
-                            AsyncImage(
-                                model = selectedImage,
-                                contentDescription = "Full screen wallpaper preview",
-                                modifier = Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(18.dp)),
-                                contentScale = ContentScale.Fit
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            Box(
+                                modifier = Modifier.weight(1f).fillMaxWidth()
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(Color(0xFF0B101B))
                             ) {
-                                OutlinedButton(
-                                    onClick = {
-                                        selectedImage?.let { uri ->
-                                            val updated = favouriteImages.toMutableSet()
-                                            if (uri.toString() in updated) updated.remove(uri.toString()) else updated.add(uri.toString())
-                                            favouriteImages = updated
-                                            preferences.edit().putStringSet("favourite_images", updated).apply()
-                                        }
-                                    },
-                                    modifier = Modifier.weight(1f)
-                                ) { Text(if (selectedImage?.toString() in favouriteImages) "★ SAVED" else "☆ FAVOURITE", maxLines = 1, softWrap = false) }
-                                Button(
-                                    onClick = { selectedImage?.let { applyWallpaper(it) }; showImagePreview = false },
-                                    modifier = Modifier.weight(1f),
-                                    enabled = !isApplying
-                                ) { Text(if (isApplying) "APPLYING…" else "APPLY", maxLines = 1, softWrap = false) }
+                                AsyncImage(
+                                    model = selectedImage,
+                                    contentDescription = "Full screen wallpaper preview",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Fit
+                                )
+                                Row(
+                                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                                        .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xCC050811), Color(0xF2050811))))
+                                        .padding(horizontal = 12.dp, vertical = 14.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            selectedImage?.let { uri ->
+                                                val updated = favouriteImages.toMutableSet()
+                                                if (uri.toString() in updated) updated.remove(uri.toString()) else updated.add(uri.toString())
+                                                favouriteImages = updated
+                                                preferences.edit().putStringSet("favourite_images", updated).apply()
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0xCC151D30), contentColor = Color.White)
+                                    ) {
+                                        Text(if (selectedImage?.toString() in favouriteImages) "★ SAVED" else "☆ FAVOURITE", maxLines = 1, softWrap = false)
+                                    }
+                                    Button(
+                                        onClick = { selectedImage?.let { applyWallpaper(it) }; showImagePreview = false },
+                                        modifier = Modifier.weight(1f),
+                                        enabled = !isApplying,
+                                        colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF080B14))
+                                    ) {
+                                        Text(if (isApplying) "APPLYING…" else "APPLY", maxLines = 1, softWrap = false)
+                                    }
+                                }
                             }
                         }
                     }
