@@ -549,7 +549,7 @@ fun WallpaperShuttleApp(context: Context) {
             ) {
             Column(
                 modifier = Modifier
-                    .weight(1f)
+                    .weight(if (selectedTab == 3) 0.18f else 1f)
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 18.dp, vertical = 16.dp),
@@ -1633,6 +1633,14 @@ fun WallpaperShuttleApp(context: Context) {
 
                 }
                 if (selectedTab == 3) {
+                    Column(
+                        modifier = Modifier
+                            .weight(0.82f)
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 18.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
                     // ABOUT — app overview, feature guide, developer and support
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -1794,6 +1802,7 @@ fun WallpaperShuttleApp(context: Context) {
                         fontSize = 12.sp,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
+                    }
                 }
 
             NavigationBar(
