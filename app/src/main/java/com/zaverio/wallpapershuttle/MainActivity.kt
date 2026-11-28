@@ -1181,9 +1181,9 @@ fun WallpaperShuttleApp(context: Context) {
                             ) {
                                 AsyncImage(
                                     model = selectedImage,
-                                    contentDescription = "Full screen wallpaper preview",
+                                    contentDescription = "Full screen wallpaper preview with overlay controls",
                                     modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Fit
+                                    contentScale = ContentScale.Crop
                                 )
                                 Row(
                                     modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
