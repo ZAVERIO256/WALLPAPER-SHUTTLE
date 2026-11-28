@@ -1173,7 +1173,7 @@ fun WallpaperShuttleApp(context: Context) {
                                 contentScale = ContentScale.Fit
                             )
                             Row(
-                                modifier = Modifier.fillMaxWidth().navigationBarsPadding(),
+                                modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 OutlinedButton(
@@ -1792,9 +1792,10 @@ fun WallpaperShuttleApp(context: Context) {
                 }
 
             NavigationBar(
-                containerColor = Color(0xFF111A2A),
+                modifier = Modifier.navigationBarsPadding(),
+                containerColor = Color(0xFF0D1524),
                 contentColor = Color.White,
-                tonalElevation = 12.dp
+                tonalElevation = 0.dp
             ) {
                 NavigationBarItem(
                     selected = selectedTab == 0,
@@ -1804,7 +1805,7 @@ fun WallpaperShuttleApp(context: Context) {
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = Accent,
                         selectedTextColor = Accent,
-                        indicatorColor = Accent.copy(alpha = 0.16f),
+                        indicatorColor = Accent.copy(alpha = 0.20f),
                         unselectedIconColor = MutedText,
                         unselectedTextColor = MutedText
                     )
