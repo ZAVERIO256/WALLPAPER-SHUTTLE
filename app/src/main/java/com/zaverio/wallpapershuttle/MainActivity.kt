@@ -108,7 +108,7 @@ private fun isImageFile(file: DocumentFile): Boolean {
     val name = file.name?.lowercase() ?: return false
 
     return listOf(
-        ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"
+        ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".heic", ".heif", ".avif", ".tif", ".tiff"
     ).any { name.endsWith(it) }
 }
 
@@ -138,7 +138,7 @@ private fun findImages(folder: DocumentFile): List<Uri> {
         }
     }
 
-    return results
+    return results.distinctBy { it.toString() }.sortedBy { it.toString().lowercase() }
 }
 
 @Composable
@@ -1187,13 +1187,14 @@ fun WallpaperShuttleApp(context: Context) {
                 if (showImagePreview && selectedImage != null) {
                     androidx.compose.ui.window.Dialog(
                         onDismissRequest = { showImagePreview = false },
-                        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+                        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = true)
                     ) {
                         Column(
                             modifier = Modifier.fillMaxSize()
                                 .background(Color(0xFF050811))
-                                .windowInsetsPadding(WindowInsets.safeDrawing)
-                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                                .statusBarsPadding()
+                                .navigationBarsPadding()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Row(
@@ -1210,8 +1211,10 @@ fun WallpaperShuttleApp(context: Context) {
                                 modifier = Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(18.dp)),
                                 contentScale = ContentScale.Fit
                             )
-                            Spacer(Modifier.height(14.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().navigationBarsPadding(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
                                 OutlinedButton(
                                     onClick = {
                                         selectedImage?.let { uri ->
@@ -1222,12 +1225,12 @@ fun WallpaperShuttleApp(context: Context) {
                                         }
                                     },
                                     modifier = Modifier.weight(1f)
-                                ) { Text(if (selectedImage?.toString() in favouriteImages) "★ SAVED" else "☆ FAVOURITE") }
+                                ) { Text(if (selectedImage?.toString() in favouriteImages) "★ SAVED" else "☆ FAVOURITE", maxLines = 1, softWrap = false) }
                                 Button(
                                     onClick = { selectedImage?.let { applyWallpaper(it) }; showImagePreview = false },
                                     modifier = Modifier.weight(1f),
                                     enabled = !isApplying
-                                ) { Text("APPLY") }
+                                ) { Text(if (isApplying) "APPLYING…" else "APPLY", maxLines = 1, softWrap = false) }
                             }
                         }
                     }
