@@ -14,6 +14,7 @@ import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
 import androidx.documentfile.provider.DocumentFile
 import java.util.concurrent.TimeUnit
+import org.json.JSONArray
 
 /**
  * System-managed live wallpaper renderer. Android owns this service while it
@@ -201,7 +202,7 @@ class ShuffleLiveWallpaperService : WallpaperService() {
                         else if (file.isFile && (
                             file.type?.startsWith("image/", true) == true ||
                                 file.name?.lowercase()?.let { name ->
-                                    listOf(".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif")
+                                    listOf(".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".heic", ".heif", ".avif", ".tif", ".tiff")
                                         .any(name::endsWith)
                                 } == true
                             )
@@ -216,6 +217,54 @@ class ShuffleLiveWallpaperService : WallpaperService() {
 
         private fun setStatus(message: String) {
             preferences().edit().putString("last_rotation_status", message).apply()
+        }
+
+        /**
+         * Persistent shuffle bag: every eligible image is visited once before
+         * a new random order is created. The bag survives wallpaper-engine
+         * recreation and avoids immediate repeats at cycle boundaries.
+         */
+        private fun shuffleBagCandidates(eligible: List<Uri>): List<Uri> {
+            val prefs = preferences()
+            val current = eligible.map { it.toString() }.distinct()
+            val signature = current.sorted().joinToString("\n")
+            var bag = try {
+                val saved = JSONArray(prefs.getString("shuffle_bag_uris", "[]"))
+                (0 until saved.length()).map { saved.getString(it) }
+            } catch (_: Exception) {
+                emptyList()
+            }
+            var cursor = prefs.getInt("shuffle_bag_cursor", 0)
+            val savedSignature = prefs.getString("shuffle_bag_signature", null)
+            if (savedSignature != signature || bag.size != current.size || bag.toSet() != current.toSet()) {
+                bag = current.shuffled().toMutableList()
+                if (bag.size > 1 && bag.firstOrNull() == lastUri?.toString()) {
+                    val swapIndex = (1 until bag.size).random()
+                    val first = bag[0]
+                    bag[0] = bag[swapIndex]
+                    bag[swapIndex] = first
+                }
+                cursor = 0
+                prefs.edit()
+                    .putString("shuffle_bag_signature", signature)
+                    .putString("shuffle_bag_uris", JSONArray(bag).toString())
+                    .putInt("shuffle_bag_cursor", 0)
+                    .apply()
+            } else if (cursor >= bag.size) {
+                bag = current.shuffled().toMutableList()
+                if (bag.size > 1 && bag.firstOrNull() == lastUri?.toString()) {
+                    val swapIndex = (1 until bag.size).random()
+                    val first = bag[0]
+                    bag[0] = bag[swapIndex]
+                    bag[swapIndex] = first
+                }
+                cursor = 0
+                prefs.edit()
+                    .putString("shuffle_bag_uris", JSONArray(bag).toString())
+                    .putInt("shuffle_bag_cursor", 0)
+                    .apply()
+            }
+            return bag.drop(cursor).map(Uri::parse)
         }
 
         private fun showNextImage(requestedUri: Uri? = null) {
@@ -263,16 +312,19 @@ class ShuffleLiveWallpaperService : WallpaperService() {
             if (lastUri == null) {
                 lastUri = prefs.getString("last_image_uri", null)?.let(Uri::parse)
             }
-            val candidates = eligible.filter { it != lastUri }.ifEmpty { eligible }
-            val orderedCandidates = if (requestedUri != null && requestedUri in eligible) {
-                listOf(requestedUri) + candidates.filter { it != requestedUri }
-            } else candidates
-            // A damaged or temporarily unreadable file should not leave the
-            // display stuck: try several different images before giving up.
+            val bagCandidates = shuffleBagCandidates(eligible)
+            val attemptCandidates = if (requestedUri != null && requestedUri in eligible) {
+                listOf(requestedUri) + bagCandidates.filter { it != requestedUri }
+            } else {
+                bagCandidates
+            }
+            // Walk the complete remaining shuffle bag. A temporarily unreadable
+            // file is skipped, but no later readable image is omitted merely
+            // because it was outside a small random sample.
             var chosen: Uri? = null
             var decoded: Bitmap? = null
             var failedAttempts = 0
-            val attemptCandidates = if (requestedUri != null && requestedUri in eligible) orderedCandidates.take(minOf(4, orderedCandidates.size)) else orderedCandidates.shuffled().take(minOf(4, orderedCandidates.size))
+            var consumedBagEntries = 0
             for (candidate in attemptCandidates) {
                 val attempt = try {
                     decodeForWallpaper(candidate)
@@ -282,9 +334,17 @@ class ShuffleLiveWallpaperService : WallpaperService() {
                 if (attempt != null) {
                     chosen = candidate
                     decoded = attempt
+                    if (requestedUri == null) consumedBagEntries++
                     break
                 }
                 failedAttempts++
+                if (requestedUri == null) consumedBagEntries++
+            }
+            if (requestedUri == null && consumedBagEntries > 0) {
+                prefs.edit().putInt(
+                    "shuffle_bag_cursor",
+                    prefs.getInt("shuffle_bag_cursor", 0) + consumedBagEntries
+                ).apply()
             }
 
             var newBitmap = decoded
