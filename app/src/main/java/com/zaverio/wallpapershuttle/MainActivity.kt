@@ -942,12 +942,12 @@ fun WallpaperShuttleApp(context: Context) {
                                 }
                             }
                         }
-                    }
                     if (visibleImages.size < allVisibleImages.size) {
                         OutlinedButton(
                             onClick = { galleryDisplayLimit = (galleryDisplayLimit + 40).coerceAtMost(allVisibleImages.size) },
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("LOAD 40 MORE IMAGES") }
+                    }
                     }
                 }
 
