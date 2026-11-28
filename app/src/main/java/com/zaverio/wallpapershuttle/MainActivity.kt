@@ -44,11 +44,12 @@ import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
 
-private val DarkBackground = Color(0xFF090E1A)
-private val CardBackground = Color(0xFF151F31)
-private val Accent = Color(0xFF9B8CFF)
-private val AccentMint = Color(0xFF65E0C1)
-private val MutedText = Color(0xFFB4BED0)
+private val DarkBackground = Color(0xFF070B14)
+private val CardBackground = Color(0xFF111A2B)
+private val Accent = Color(0xFF9D8CFF)
+private val AccentMint = Color(0xFF64E6C2)
+private val MutedText = Color(0xFF9EACC2)
+private val PanelHighlight = Color(0xFF1B2942)
 
 private fun formatRotationInterval(totalSeconds: Int): String {
     val seconds = totalSeconds.coerceIn(5, 86400)
@@ -539,79 +540,39 @@ fun WallpaperShuttleApp(context: Context) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Brush.verticalGradient(listOf(Color(0xFF111A2B), DarkBackground, Color(0xFF080C15))))
+                    .background(Brush.verticalGradient(listOf(Color(0xFF101B31), Color(0xFF090F1C), DarkBackground)))
             ) {
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(horizontal = 18.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(13.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(52.dp)
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(Brush.linearGradient(listOf(Accent, Color(0xFF55C9D8)))),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("✦", color = Color(0xFF101522), fontSize = 29.sp, fontWeight = FontWeight.Black)
+                    Box(modifier = Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(Brush.linearGradient(listOf(Color(0xFF38D8E8), Color(0xFF6755E8), Color(0xFFB05BFF)))), contentAlignment = Alignment.Center) {
+                        Text("W", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Black)
                     }
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(
-                            "WALLPAPER SHUTTLE",
-                            color = Color.White,
-                            fontSize = 19.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = 0.7.sp
-                        )
-                        Text("Make every screen feel new.", color = MutedText, fontSize = 12.sp)
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("WALLPAPER", color = MutedText, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.1.sp)
+                        Text("SHUTTLE", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.1.sp)
                     }
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = if (rotationRunning) AccentMint.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.07f),
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.dp,
-                            if (rotationRunning) AccentMint.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.12f)
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Box(
-                                Modifier.size(7.dp).clip(RoundedCornerShape(50))
-                                    .background(if (rotationRunning) AccentMint else MutedText)
-                            )
-                            Text(
-                                if (rotationRunning) "ACTIVE" else "READY",
-                                color = if (rotationRunning) AccentMint else MutedText,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.6.sp
-                            )
+                    Surface(shape = RoundedCornerShape(50), color = if (rotationRunning) AccentMint.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.055f), border = androidx.compose.foundation.BorderStroke(1.dp, if (rotationRunning) AccentMint.copy(alpha = 0.42f) else Color.White.copy(alpha = 0.10f))) {
+                        Row(modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                            Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(if (rotationRunning) AccentMint else MutedText))
+                            Text(if (rotationRunning) "RUNNING" else "STANDBY", color = if (rotationRunning) AccentMint else MutedText, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.7.sp)
                         }
                     }
                 }
-
-                Text(
-                    when (selectedTab) {
-                        0 -> "Your personal wallpaper studio"
-                        1 -> "Your collection, all in one place"
-                        2 -> "Fine-tune your experience"
-                        else -> "Everything about the app"
-                    },
-                    color = Color.White,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(when (selectedTab) { 0 -> "Your wallpaper studio"; 1 -> "Explore your collection"; 2 -> "Personalise your experience"; else -> "About Wallpaper Shuttle" }, color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp)
+                    Text(when (selectedTab) { 0 -> "A fresh look, automatically."; 1 -> "Every image. Beautifully organised."; 2 -> "Make every detail work your way."; else -> "Designed for your everyday screens." }, color = MutedText, fontSize = 12.sp)
+                }
 
 
                 if (selectedTab == 0) {
