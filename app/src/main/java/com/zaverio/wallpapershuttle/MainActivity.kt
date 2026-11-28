@@ -487,7 +487,7 @@ fun WallpaperShuttleApp(context: Context) {
             }
             context.startActivity(liveWallpaperIntent)
         } catch (error: Exception) {
-            preferences.edit().putBoolean("rotation_enabled", false).putBoolean("live_wallpaper_mode", false).commit()
+            preferences.edit().putBoolean("rotation_enabled", false).putBoolean("live_wallpaper_mode", false).putBoolean("live_wallpaper_pending_confirmation", false).commit()
             rotationRunning = false
             statusMessage = "Could not open Android live wallpaper preview."
         }
@@ -515,6 +515,7 @@ fun WallpaperShuttleApp(context: Context) {
             .putBoolean("rotation_enabled", false)
             .putBoolean("live_wallpaper_mode", false)
             .putBoolean("foreground_rotation_service", false)
+            .putBoolean("live_wallpaper_pending_confirmation", false)
             .remove("next_rotation_time")
             .commit()
 
