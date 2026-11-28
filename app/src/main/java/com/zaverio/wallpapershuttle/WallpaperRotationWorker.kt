@@ -27,8 +27,10 @@ class WallpaperRotationWorker(
         val folders = ArrayDeque<DocumentFile>()
         folders.add(root)
 
-        while (folders.isNotEmpty()) {
+        val visitedFolders = HashSet<String>()
+        while (folders.isNotEmpty() && visitedFolders.size < 2000 && images.size < 10000) {
             val folder = folders.removeFirst()
+            if (!visitedFolders.add(folder.uri.toString())) continue
 
             val files = try {
                 folder.listFiles()
@@ -37,6 +39,7 @@ class WallpaperRotationWorker(
             }
 
             for (file in files) {
+                if (images.size >= 10000) break
                 try {
                     if (file.isDirectory) {
                         folders.add(file)
