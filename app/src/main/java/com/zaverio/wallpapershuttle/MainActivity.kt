@@ -37,6 +37,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.compose.runtime.SideEffect
+import android.view.WindowManager
 import androidx.documentfile.provider.DocumentFile
 import coil.compose.AsyncImage
 import java.util.concurrent.Executors
@@ -540,6 +544,7 @@ fun WallpaperShuttleApp(context: Context) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
                     .background(Brush.verticalGradient(listOf(Color(0xFF101B31), Color(0xFF090F1C), DarkBackground)))
             ) {
             Column(
@@ -1148,13 +1153,16 @@ fun WallpaperShuttleApp(context: Context) {
                 if (showImagePreview && selectedImage != null) {
                     androidx.compose.ui.window.Dialog(
                         onDismissRequest = { showImagePreview = false },
-                        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = true)
+                        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
                     ) {
+                        val dialogView = LocalView.current
+                        SideEffect {
+                            (dialogView.parent as? DialogWindowProvider)?.window?.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
+                        }
                         Column(
                             modifier = Modifier.fillMaxSize()
                                 .background(Color(0xFF050811))
-                                .statusBarsPadding()
-                                .navigationBarsPadding()
+                                .windowInsetsPadding(WindowInsets.safeDrawing)
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
@@ -1666,21 +1674,18 @@ fun WallpaperShuttleApp(context: Context) {
                                 fontSize = 13.sp,
                                 lineHeight = 20.sp
                             )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceEvenly
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("OFFLINE", color = Accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                    Text("Designed for local use", color = Color.LightGray, fontSize = 10.sp)
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("OFFLINE", color = Accent, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
+                                    Text("Local storage", color = Color.LightGray, fontSize = 10.sp, maxLines = 1)
                                 }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("5s–24h", color = Accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                    Text("Rotation interval", color = Color.LightGray, fontSize = 10.sp)
+                                Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("5s–24h", color = Accent, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
+                                    Text("Intervals", color = Color.LightGray, fontSize = 10.sp, maxLines = 1)
                                 }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("3 MODES", color = Accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                    Text("Home • Lock • Both", color = Color.LightGray, fontSize = 10.sp)
+                                Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("3 MODES", color = Accent, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
+                                    Text("Home • Lock • Both", color = Color.LightGray, fontSize = 9.sp, maxLines = 1, softWrap = false)
                                 }
                             }
                         }
@@ -1792,7 +1797,6 @@ fun WallpaperShuttleApp(context: Context) {
                 }
 
             NavigationBar(
-                modifier = Modifier.navigationBarsPadding(),
                 containerColor = Color(0xFF0D1524),
                 contentColor = Color.White,
                 tonalElevation = 0.dp
