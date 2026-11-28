@@ -163,6 +163,7 @@ fun WallpaperShuttleApp(context: Context) {
         mutableStateOf(preferences.getStringSet("favourite_images", emptySet())?.toSet() ?: emptySet())
     }
     var galleryFilter by remember { mutableStateOf("ALL") }
+    var galleryDisplayLimit by remember { mutableIntStateOf(40) }
     var favouritesOnlyRotation by remember { mutableStateOf(preferences.getBoolean("favourites_only_rotation", false)) }
     var showImagePreview by remember { mutableStateOf(false) }
 
@@ -824,12 +825,13 @@ fun WallpaperShuttleApp(context: Context) {
                             fontWeight = FontWeight.Bold
                         )
 
-                        val visibleImages = when (galleryFilter) {
+                        val allVisibleImages = when (galleryFilter) {
                             "FAVOURITES" -> imageUris.filter { it.toString() in favouriteImages }
                             "EXCLUDED" -> imageUris.filter { it.toString() in excludedImages }
                             else -> imageUris.filterNot { it.toString() in excludedImages }
                         }
 
+                        val visibleImages = allVisibleImages.take(galleryDisplayLimit)
                         Row(
                             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -842,7 +844,7 @@ fun WallpaperShuttleApp(context: Context) {
                                 }
                                 FilterChip(
                                     selected = galleryFilter == filter,
-                                    onClick = { galleryFilter = filter },
+                                    onClick = { galleryFilter = filter; galleryDisplayLimit = 40 },
                                     label = { Text("$filter  $count", fontSize = 11.sp) },
                                     colors = FilterChipDefaults.filterChipColors(
                                         selectedContainerColor = Accent.copy(alpha = 0.22f),
@@ -864,7 +866,7 @@ fun WallpaperShuttleApp(context: Context) {
                             )
                         } else {
                             Text(
-                                "${visibleImages.size} images shown • Tap a photo to preview",
+                                "${visibleImages.size} of ${allVisibleImages.size} images shown • Tap a photo to preview",
                                 color = MutedText,
                                 fontSize = 12.sp
                             )
@@ -940,6 +942,9 @@ fun WallpaperShuttleApp(context: Context) {
                                 }
                             }
                         }
+                    }
+                    if (visibleImages.size < allVisibleImages.size) {
+                        OutlinedButton(onClick = { galleryDisplayLimit = (galleryDisplayLimit + 40).coerceAtMost(allVisibleImages.size) }, modifier = Modifier.fillMaxWidth()) { Text("LOAD 40 MORE IMAGES") }
                     }
                 }
 
