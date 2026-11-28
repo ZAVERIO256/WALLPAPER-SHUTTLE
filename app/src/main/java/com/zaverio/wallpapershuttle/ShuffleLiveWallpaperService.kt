@@ -35,6 +35,7 @@ class ShuffleLiveWallpaperService : WallpaperService() {
         private var cachedFolderUri: String? = null
         private var lastImageScanAt = 0L
         private var imageLoadInProgress = false
+        private var lastAutomaticImageRequestAt = 0L
         private var lastUri: Uri? = null
         private var surfaceWidth = 0
         private var surfaceHeight = 0
@@ -273,6 +274,11 @@ class ShuffleLiveWallpaperService : WallpaperService() {
 
         private fun showNextImage(requestedUri: Uri? = null) {
             if (destroyed || imageLoadInProgress) return
+            val requestAt = SystemClock.elapsedRealtime()
+            // Android can deliver visibility and surface callbacks back-to-back.
+            // Ignore the duplicate automatic request after a frame is already available.
+            if (requestedUri == null && bitmap != null && requestAt - lastAutomaticImageRequestAt < 1500L) return
+            if (requestedUri == null) lastAutomaticImageRequestAt = requestAt
             imageLoadInProgress = true
             try {
                 showNextImageInternal(requestedUri)
@@ -312,7 +318,7 @@ class ShuffleLiveWallpaperService : WallpaperService() {
             // callbacks can happen close together; rescanning the whole SAF tree
             // for every image change can stall the wallpaper engine on large folders.
             val now = SystemClock.elapsedRealtime()
-            if (cachedFolderUri != folderString || imageUris.isEmpty() || now - lastImageScanAt >= TimeUnit.MINUTES.toMillis(5)) {
+            if (cachedFolderUri != folderString || now - lastImageScanAt >= TimeUnit.MINUTES.toMillis(5)) {
                 imageUris = findImages(root)
                 cachedFolderUri = folderString
                 lastImageScanAt = now
