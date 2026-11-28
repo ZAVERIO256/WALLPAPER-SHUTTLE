@@ -113,37 +113,32 @@ private fun isImageFile(file: DocumentFile): Boolean {
     val name = file.name?.lowercase() ?: return false
 
     return listOf(
-        ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".heic", ".heif", ".avif", ".tif", ".tiff"
+        ".jpg", ".jpeg", ".jpe", ".jfif", ".png", ".webp", ".gif", ".bmp", ".heic", ".heif", ".avif", ".tif", ".tiff"
     ).any { name.endsWith(it) }
 }
 
 private fun findImages(folder: DocumentFile): List<Uri> {
-    val results = mutableListOf<Uri>()
+    val results = LinkedHashSet<String>()
     val folders = ArrayDeque<DocumentFile>()
+    val visitedFolders = HashSet<String>()
     folders.add(folder)
 
     while (folders.isNotEmpty()) {
         val current = folders.removeFirst()
-
-        val files = try {
-            current.listFiles()
-        } catch (_: Exception) {
-            continue
-        }
-
+        if (!visitedFolders.add(current.uri.toString())) continue
+        val files = try { current.listFiles() } catch (_: Exception) { continue }
         for (file in files) {
             try {
                 when {
-                    file.isDirectory -> folders.add(file)
-                    file.isFile && isImageFile(file) -> results.add(file.uri)
+                    file.isDirectory -> folders.addLast(file)
+                    file.isFile && isImageFile(file) -> results.add(file.uri.toString())
                 }
             } catch (_: Exception) {
-                // Skip inaccessible entries.
+                // Skip only entries that the storage provider cannot expose.
             }
         }
     }
-
-    return results.distinctBy { it.toString() }.sortedBy { it.toString().lowercase() }
+    return results.map(Uri::parse).sortedBy { it.toString().lowercase() }
 }
 
 @Composable
