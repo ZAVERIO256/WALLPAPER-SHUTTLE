@@ -44,6 +44,7 @@ import android.view.WindowManager
 import androidx.documentfile.provider.DocumentFile
 import coil.compose.AsyncImage
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
@@ -277,41 +278,48 @@ fun WallpaperShuttleApp(context: Context) {
 
     val executor = remember { Executors.newSingleThreadExecutor() }
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    val scanGeneration = remember { AtomicInteger(0) }
 
     DisposableEffect(Unit) {
-        onDispose { executor.shutdown() }
+        onDispose {
+            scanGeneration.incrementAndGet()
+            executor.shutdownNow()
+        }
     }
 
     fun scanFolder(uri: Uri) {
+        val generation = scanGeneration.incrementAndGet()
         isScanning = true
         statusMessage = "Scanning selected folder..."
 
-        executor.execute {
-            val result = try {
-                val folder = DocumentFile.fromTreeUri(context, uri)
-                if (folder != null && folder.canRead()) {
-                    findImages(folder)
-                } else {
+        try {
+            executor.execute {
+                val result = try {
+                    val folder = DocumentFile.fromTreeUri(context, uri)
+                    if (folder != null && folder.canRead()) findImages(folder) else emptyList()
+                } catch (_: Exception) {
                     emptyList()
                 }
-            } catch (_: Exception) {
-                emptyList()
-            }
 
-            mainHandler.post {
-                imageUris = result
-
-                val eligible = result.filterNot {
-                    it.toString() in excludedImages
+                mainHandler.post {
+                    // Ignore an older scan if the user selected another folder.
+                    if (scanGeneration.get() != generation) return@post
+                    imageUris = result
+                    val eligible = result.filterNot { it.toString() in excludedImages }
+                    selectedImage = selectedImage?.takeIf {
+                        result.contains(it) && it.toString() !in excludedImages
+                    } ?: eligible.randomOrNull()
+                    isScanning = false
+                    statusMessage = if (result.isEmpty()) {
+                        "No readable images found. Check folder access or choose another folder."
+                    } else {
+                        "${result.size} supported images found."
+                    }
                 }
-
-                selectedImage = selectedImage?.takeIf {
-                    result.contains(it) && it.toString() !in excludedImages
-                } ?: eligible.randomOrNull()
-
-                isScanning = false
-                statusMessage = "${result.size} supported images found."
             }
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            isScanning = false
+            statusMessage = "Folder scan could not start. Reopen the app and try again."
         }
     }
 
