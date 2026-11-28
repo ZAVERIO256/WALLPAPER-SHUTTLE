@@ -202,11 +202,14 @@ class ShuffleLiveWallpaperService : WallpaperService() {
             val pending = ArrayDeque<DocumentFile>()
             val visitedFolders = HashSet<String>()
             pending.add(root)
-            while (pending.isNotEmpty()) {
+            // Bound traversal so unusually large or cyclic provider trees cannot
+            // monopolise the wallpaper engine or exhaust memory.
+            while (pending.isNotEmpty() && visitedFolders.size < 2000 && found.size < 10000) {
                 val folder = pending.removeFirst()
                 if (!visitedFolders.add(folder.uri.toString())) continue
                 val children = try { folder.listFiles() } catch (_: Exception) { continue }
                 for (file in children) {
+                    if (found.size >= 10000) break
                     try {
                         when {
                             file.isDirectory -> pending.addLast(file)
