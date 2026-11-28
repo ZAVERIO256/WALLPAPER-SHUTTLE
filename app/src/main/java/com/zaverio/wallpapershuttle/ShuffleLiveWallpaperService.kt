@@ -426,60 +426,43 @@ class ShuffleLiveWallpaperService : WallpaperService() {
 
         private fun decodeForWallpaper(uri: Uri): Bitmap? {
             val mode = preferences().getString("display_mode", "crop") ?: "crop"
+            val maxPixels = 4_000_000L
+            val maxDimension = 2400
             val decoded = if (android.os.Build.VERSION.SDK_INT >= 28) {
                 val source = ImageDecoder.createSource(contentResolver, uri)
                 ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
                     decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
                     decoder.isMutableRequired = false
-                    if (surfaceWidth > 0 && surfaceHeight > 0) {
-                        val sourceWidth = info.size.width.toFloat()
-                        val sourceHeight = info.size.height.toFloat()
-                        val scaleX = surfaceWidth / sourceWidth
-                        val scaleY = surfaceHeight / sourceHeight
-                        val renderScale = when (mode) {
-                            "fit" -> minOf(scaleX, scaleY)
-                            "stretch" -> 1f
-                            else -> maxOf(scaleX, scaleY)
-                        }.coerceAtLeast(0.0001f)
-                        val requiredWidth = (surfaceWidth / renderScale).toInt().coerceAtLeast(1)
-                        val requiredHeight = (surfaceHeight / renderScale).toInt().coerceAtLeast(1)
-                        val sample = maxOf(1, minOf(info.size.width / requiredWidth, info.size.height / requiredHeight))
-                        var powerOfTwoSample = 1
-                        while (powerOfTwoSample * 2 <= sample) powerOfTwoSample *= 2
-                        decoder.setTargetSampleSize(powerOfTwoSample)
-                    }
+                    val sw = surfaceWidth.coerceAtLeast(1)
+                    val sh = surfaceHeight.coerceAtLeast(1)
+                    val sx = sw / info.size.width.toFloat()
+                    val sy = sh / info.size.height.toFloat()
+                    val renderScale = when (mode) { "fit" -> minOf(sx, sy); "stretch" -> 1f; else -> maxOf(sx, sy) }.coerceAtLeast(0.0001f)
+                    val w = (sw / renderScale).toFloat().coerceAtMost(info.size.width.toFloat())
+                    val h = (sh / renderScale).toFloat().coerceAtMost(info.size.height.toFloat())
+                    val pixelScale = minOf(1f, kotlin.math.sqrt(maxPixels.toFloat() / (w * h)))
+                    val dimensionScale = minOf(1f, maxDimension / maxOf(w, h))
+                    val scale = minOf(pixelScale, dimensionScale)
+                    decoder.setTargetSize((w * scale).toInt().coerceAtLeast(1), (h * scale).toInt().coerceAtLeast(1))
                 }
             } else {
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
                 if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-                var sampleSize = 1
-                if (surfaceWidth > 0 && surfaceHeight > 0) {
-                    val scaleX = surfaceWidth / bounds.outWidth.toFloat()
-                    val scaleY = surfaceHeight / bounds.outHeight.toFloat()
-                    val renderScale = when (mode) {
-                        "fit" -> minOf(scaleX, scaleY)
-                        "stretch" -> 1f
-                        else -> maxOf(scaleX, scaleY)
-                    }.coerceAtLeast(0.0001f)
-                    val requiredWidth = (surfaceWidth / renderScale).toInt().coerceAtLeast(1)
-                    val requiredHeight = (surfaceHeight / renderScale).toInt().coerceAtLeast(1)
-                    while (bounds.outWidth / (sampleSize * 2) >= requiredWidth && bounds.outHeight / (sampleSize * 2) >= requiredHeight) sampleSize *= 2
-                }
-                val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+                val p = kotlin.math.sqrt(maxPixels.toDouble() / (bounds.outWidth.toDouble() * bounds.outHeight.toDouble())).coerceAtMost(1.0)
+                val d = (maxDimension.toDouble() / maxOf(bounds.outWidth, bounds.outHeight)).coerceAtMost(1.0)
+                val scale = minOf(p, d)
+                val tw = (bounds.outWidth * scale).toInt().coerceAtLeast(1)
+                val th = (bounds.outHeight * scale).toInt().coerceAtLeast(1)
+                val options = BitmapFactory.Options().apply { inSampleSize = maxOf(1, minOf(bounds.outWidth / tw, bounds.outHeight / th)) }
                 contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
             } ?: return null
-
-            // Transparent pixels are not black. This matters for PNG images
-            // that intentionally use transparency around their artwork.
             if (isFailedBlackFrame(decoded)) {
                 decoded.recycle()
                 setStatus("Skipped an empty or fully black image; keeping the previous wallpaper")
                 return null
             }
-            preferences().edit()
-                .putString("last_image_quality", "${decoded.width}×${decoded.height} image loaded")
-                .apply()
+            preferences().edit().putString("last_image_quality", "${decoded.width}×${decoded.height} image loaded").apply()
             return decoded
         }
         /**
