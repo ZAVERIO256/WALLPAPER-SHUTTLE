@@ -186,35 +186,35 @@ class ShuffleLiveWallpaperService : WallpaperService() {
         }
 
         private fun findImages(root: DocumentFile): List<Uri> {
-            val found = mutableListOf<Uri>()
+            val found = LinkedHashSet<String>()
             val pending = ArrayDeque<DocumentFile>()
+            val visitedFolders = HashSet<String>()
             pending.add(root)
             while (pending.isNotEmpty()) {
                 val folder = pending.removeFirst()
-                val children = try {
-                    folder.listFiles()
-                } catch (_: Exception) {
-                    emptyArray()
-                }
+                if (!visitedFolders.add(folder.uri.toString())) continue
+                val children = try { folder.listFiles() } catch (_: Exception) { continue }
                 for (file in children) {
                     try {
-                        if (file.isDirectory) pending.add(file)
-                        else if (file.isFile && (
-                            file.type?.startsWith("image/", true) == true ||
-                                file.name?.lowercase()?.let { name ->
-                                    listOf(".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".heic", ".heif", ".avif", ".tif", ".tiff")
-                                        .any(name::endsWith)
-                                } == true
-                            )
-                        ) found.add(file.uri)
+                        when {
+                            file.isDirectory -> pending.addLast(file)
+                            file.isFile -> {
+                                val name = file.name?.lowercase().orEmpty()
+                                val mime = file.type?.lowercase().orEmpty()
+                                val imageExtension = listOf(
+                                    ".jpg", ".jpeg", ".jpe", ".jfif", ".png", ".webp",
+                                    ".bmp", ".gif", ".heic", ".heif", ".avif", ".tif", ".tiff"
+                                ).any(name::endsWith)
+                                if (mime.startsWith("image/") || imageExtension) found.add(file.uri.toString())
+                            }
+                        }
                     } catch (_: Exception) {
-                        // Ignore individual files that disappear or become inaccessible.
+                        // Skip only the individual entry that the provider cannot expose.
                     }
                 }
             }
-            return found
+            return found.map(Uri::parse)
         }
-
         private fun setStatus(message: String) {
             preferences().edit().putString("last_rotation_status", message).apply()
         }
@@ -313,34 +313,31 @@ class ShuffleLiveWallpaperService : WallpaperService() {
                 lastUri = prefs.getString("last_image_uri", null)?.let(Uri::parse)
             }
             val bagCandidates = shuffleBagCandidates(eligible)
-            val attemptCandidates = if (requestedUri != null && requestedUri in eligible) {
-                listOf(requestedUri) + bagCandidates.filter { it != requestedUri }
-            } else {
-                bagCandidates
+            // If a manual selection is still waiting in this cycle, move it to
+            // the front and consume every bag entry up to it. This prevents it
+            // from appearing a second time during the same random cycle.
+            val requestedInBag = requestedUri?.takeIf { it in bagCandidates }
+            val attemptCandidates = when {
+                requestedInBag != null -> listOf(requestedInBag) + bagCandidates.filter { it != requestedInBag }
+                requestedUri != null && requestedUri in eligible -> listOf(requestedUri) + bagCandidates
+                else -> bagCandidates
             }
-            // Walk the complete remaining shuffle bag. A temporarily unreadable
-            // file is skipped, but no later readable image is omitted merely
-            // because it was outside a small random sample.
             var chosen: Uri? = null
             var decoded: Bitmap? = null
             var failedAttempts = 0
             var consumedBagEntries = 0
             for (candidate in attemptCandidates) {
-                val attempt = try {
-                    decodeForWallpaper(candidate)
-                } catch (_: Exception) {
-                    null
-                }
+                val attempt = try { decodeForWallpaper(candidate) } catch (_: Exception) { null }
                 if (attempt != null) {
                     chosen = candidate
                     decoded = attempt
-                    if (requestedUri == null) consumedBagEntries++
+                    if (requestedUri == null || requestedInBag != null) consumedBagEntries++
                     break
                 }
                 failedAttempts++
-                if (requestedUri == null) consumedBagEntries++
+                if (requestedUri == null || requestedInBag != null) consumedBagEntries++
             }
-            if (requestedUri == null && consumedBagEntries > 0) {
+            if (consumedBagEntries > 0) {
                 prefs.edit().putInt(
                     "shuffle_bag_cursor",
                     prefs.getInt("shuffle_bag_cursor", 0) + consumedBagEntries
