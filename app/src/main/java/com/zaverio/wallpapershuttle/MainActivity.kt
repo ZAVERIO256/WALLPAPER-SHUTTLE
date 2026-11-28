@@ -124,11 +124,14 @@ private fun findImages(folder: DocumentFile): List<Uri> {
     val visitedFolders = HashSet<String>()
     folders.add(folder)
 
-    while (folders.isNotEmpty()) {
+    // Protect the UI/gallery from pathological trees and storage-provider loops.
+    // The cap is deliberately generous and never modifies or deletes user files.
+    while (folders.isNotEmpty() && visitedFolders.size < 2000 && results.size < 10000) {
         val current = folders.removeFirst()
         if (!visitedFolders.add(current.uri.toString())) continue
         val files = try { current.listFiles() } catch (_: Exception) { continue }
         for (file in files) {
+            if (results.size >= 10000) break
             try {
                 when {
                     file.isDirectory -> folders.addLast(file)
