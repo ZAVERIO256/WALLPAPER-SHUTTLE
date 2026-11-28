@@ -6,6 +6,8 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ImageDecoder
+import android.os.Build
 import android.graphics.Paint
 import android.graphics.RectF
 import android.net.Uri
@@ -39,41 +41,45 @@ object WallpaperImageProcessor {
         val targetWidth = screenWidth
         val targetHeight = screenHeight
 
-        // Read source bounds first. A null bitmap is expected for inJustDecodeBounds.
-        val bounds = BitmapFactory.Options().apply {
-            inJustDecodeBounds = true
-        }
-
-        val boundsStream = context.contentResolver.openInputStream(uri)
-            ?: throw IllegalStateException(
-                "Cannot open the selected image. Re-select the image folder and grant access."
-            )
-
-        boundsStream.use {
-            BitmapFactory.decodeStream(it, null, bounds)
-        }
-
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
-            throw IllegalStateException("This image is invalid or has an unsupported format.")
-        }
-
-        // Decode a memory-conscious source bitmap once, then prepare each screen separately.
-        var sampleSize = 1
-        val sourcePixels = bounds.outWidth.toLong() * bounds.outHeight
-        while (sourcePixels / ((sampleSize * 2L) * (sampleSize * 2L)) > 12_000_000L) {
-            sampleSize *= 2
-        }
-
-        val options = BitmapFactory.Options().apply {
-            inSampleSize = sampleSize
-            inPreferredConfig = Bitmap.Config.ARGB_8888
-        }
-
-        val source = context.contentResolver.openInputStream(uri)?.use {
-            BitmapFactory.decodeStream(it, null, options)
-        } ?: throw IllegalStateException(
-            "Image decoding failed. Try selecting another picture."
-        )
+        // Decode with ImageDecoder on modern Android. It handles additional
+        // platform-supported formats and applies image orientation metadata.
+        // Older supported devices retain the BitmapFactory fallback.
+        val source = if (Build.VERSION.SDK_INT >= 28) {
+            val imageSource = ImageDecoder.createSource(context.contentResolver, uri)
+            ImageDecoder.decodeBitmap(imageSource) { decoder, info, _ ->
+                decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                decoder.isMutableRequired = false
+                val width = info.size.width.coerceAtLeast(1)
+                val height = info.size.height.coerceAtLeast(1)
+                val pixelScale = sqrt(12_000_000.0 / (width.toDouble() * height.toDouble())).coerceAtMost(1.0)
+                val dimensionScale = (4096.0 / max(width, height)).coerceAtMost(1.0)
+                val scale = min(pixelScale, dimensionScale)
+                decoder.setTargetSize(
+                    (width * scale).toInt().coerceAtLeast(1),
+                    (height * scale).toInt().coerceAtLeast(1)
+                )
+            }
+        } else {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            val boundsStream = context.contentResolver.openInputStream(uri)
+                ?: throw IllegalStateException("Cannot open the selected image. Re-select the image folder and grant access.")
+            boundsStream.use { BitmapFactory.decodeStream(it, null, bounds) }
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                throw IllegalStateException("This image is invalid or has an unsupported format.")
+            }
+            var sampleSize = 1
+            val sourcePixels = bounds.outWidth.toLong() * bounds.outHeight
+            while (sourcePixels / ((sampleSize * 2L) * (sampleSize * 2L)) > 12_000_000L) {
+                sampleSize *= 2
+            }
+            val options = BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            }
+            context.contentResolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(it, null, options)
+            } ?: throw IllegalStateException("Image decoding failed. Try selecting another picture.")
+        } ?: throw IllegalStateException("Image decoding failed. Try selecting another picture.")
 
         if (source.width <= 0 || source.height <= 0) {
             source.recycle()
