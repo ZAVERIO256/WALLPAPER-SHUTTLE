@@ -335,6 +335,16 @@ class ShuffleLiveWallpaperService : WallpaperService() {
                     break
                 }
                 failedAttempts++
+                // A file that cannot be decoded (including a confirmed blank or
+                // near-solid-black frame) is removed from the selected tree so
+                // it cannot poison later shuffle cycles. SAF may refuse deletion;
+                // in that case it remains skipped for this pass.
+                val removed = deleteImageFromSelectedTree(root, candidate)
+                if (removed) {
+                    setStatus("Removed an unreadable or blank image; continuing rotation")
+                } else {
+                    setStatus("Skipped an unreadable or blank image; storage did not allow automatic deletion")
+                }
                 if (requestedUri == null || requestedInBag != null) consumedBagEntries++
             }
             if (consumedBagEntries > 0) {
@@ -368,10 +378,16 @@ class ShuffleLiveWallpaperService : WallpaperService() {
                     .putInt("unreadable_image_count", prefs.getInt("unreadable_image_count", 0) + failedAttempts)
                     .putString(
                         "last_rotation_status",
-                        if (bitmap != null) "New images could not be read. Keeping the current wallpaper and retrying"
-                        else "Images are temporarily unavailable. Re-select the folder if this continues"
+                        if (bitmap != null) "Bad images skipped or removed. Keeping the previous wallpaper"
+                        else "No readable images remain. Add or re-select images to resume rotation"
                     )
                     .apply()
+                // Do not stop the engine or publish a black frame. If more
+                // files remain, retry shortly; otherwise the normal timer
+                // continues to run and will discover newly added images.
+                if (isVisible && rotationEnabled() && imageUris.isNotEmpty()) {
+                    handler.postDelayed({ if (isVisible && rotationEnabled()) showNextImage() }, 1800L)
+                }
                 return
             }
 
@@ -415,6 +431,26 @@ class ShuffleLiveWallpaperService : WallpaperService() {
          * camera images can otherwise consume tens of megabytes per bitmap,
          * especially while two images overlap during the crossfade.
          */
+        private fun deleteImageFromSelectedTree(root: DocumentFile, target: Uri): Boolean {
+            val pending = ArrayDeque<DocumentFile>()
+            val visited = HashSet<String>()
+            pending.add(root)
+            while (pending.isNotEmpty()) {
+                val folder = pending.removeFirst()
+                if (!visited.add(folder.uri.toString())) continue
+                val children = try { folder.listFiles() } catch (_: Exception) { continue }
+                for (child in children) {
+                    try {
+                        if (child.uri == target) return child.delete()
+                        if (child.isDirectory) pending.addLast(child)
+                    } catch (_: Exception) {
+                        // Keep scanning other entries if one provider item fails.
+                    }
+                }
+            }
+            return false
+        }
+
         private fun decodeForWallpaper(uri: Uri): Bitmap? {
             if (surfaceWidth <= 0 || surfaceHeight <= 0) {
                 val image = contentResolver.openInputStream(uri)?.use {
