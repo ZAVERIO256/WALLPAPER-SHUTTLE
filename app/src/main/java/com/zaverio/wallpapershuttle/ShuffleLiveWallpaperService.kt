@@ -32,6 +32,9 @@ class ShuffleLiveWallpaperService : WallpaperService() {
         private var transitionStartedAt = 0L
         private val transitionDurationMs = 650L
         private var imageUris: List<Uri> = emptyList()
+        private var cachedFolderUri: String? = null
+        private var lastImageScanAt = 0L
+        private var imageLoadInProgress = false
         private var lastUri: Uri? = null
         private var surfaceWidth = 0
         private var surfaceHeight = 0
@@ -269,6 +272,20 @@ class ShuffleLiveWallpaperService : WallpaperService() {
         }
 
         private fun showNextImage(requestedUri: Uri? = null) {
+            if (destroyed || imageLoadInProgress) return
+            imageLoadInProgress = true
+            try {
+                showNextImageInternal(requestedUri)
+            } catch (error: OutOfMemoryError) {
+                setStatus("Not enough memory to load this wallpaper. The previous image was kept")
+            } catch (error: Exception) {
+                setStatus("Wallpaper change failed safely: ${error.message ?: "image unavailable"}")
+            } finally {
+                imageLoadInProgress = false
+            }
+        }
+
+        private fun showNextImageInternal(requestedUri: Uri? = null) {
             if (!rotationEnabled()) {
                 setStatus("Rotation is paused")
                 return
@@ -291,9 +308,15 @@ class ShuffleLiveWallpaperService : WallpaperService() {
                 return
             }
 
-            // Refresh the folder list each cycle so newly added and removed
-            // pictures are reflected without reopening the app.
-            imageUris = findImages(root)
+            // Cache the folder catalogue for five minutes. Visibility and surface
+            // callbacks can happen close together; rescanning the whole SAF tree
+            // for every image change can stall the wallpaper engine on large folders.
+            val now = SystemClock.elapsedRealtime()
+            if (cachedFolderUri != folderString || imageUris.isEmpty() || now - lastImageScanAt >= TimeUnit.MINUTES.toMillis(5)) {
+                imageUris = findImages(root)
+                cachedFolderUri = folderString
+                lastImageScanAt = now
+            }
             val excluded = prefs.getStringSet("excluded_uris", emptySet())?.toSet() ?: emptySet()
             val favourites = prefs.getStringSet("favourite_images", emptySet())?.toSet() ?: emptySet()
             val favouritesOnly = prefs.getBoolean("favourites_only_rotation", false)
