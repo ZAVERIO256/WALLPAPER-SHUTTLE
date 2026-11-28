@@ -126,8 +126,11 @@ object WallpaperImageProcessor {
                 val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG)
                 canvas.drawBitmap(source, null, destinationRect, paint)
                 return output
+            } catch (error: OutOfMemoryError) {
+                if (!output.isRecycled) output.recycle()
+                throw IllegalStateException("Not enough memory to prepare this wallpaper. Close other apps and try a smaller image.", error)
             } catch (e: Exception) {
-                output.recycle()
+                if (!output.isRecycled) output.recycle()
                 throw e
             }
         }
