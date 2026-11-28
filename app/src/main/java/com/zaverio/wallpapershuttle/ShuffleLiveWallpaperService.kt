@@ -67,6 +67,13 @@ class ShuffleLiveWallpaperService : WallpaperService() {
             }
         }
 
+        private val drawRetryTask = object : Runnable {
+            override fun run() {
+                if (destroyed || !surfaceReady) return
+                if (bitmap == null) showNextImage() else drawFrame()
+            }
+        }
+
         private val fadeTask = object : Runnable {
             override fun run() {
                 if (destroyed || !surfaceReady || previousBitmap == null) return
@@ -486,38 +493,30 @@ class ShuffleLiveWallpaperService : WallpaperService() {
                 val options = BitmapFactory.Options().apply { inSampleSize = maxOf(1, minOf(bounds.outWidth / tw, bounds.outHeight / th)) }
                 contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
             } ?: return null
-            if (isFailedBlackFrame(decoded)) {
+            if (isFullyTransparent(decoded)) {
                 decoded.recycle()
-                setStatus("Skipped an empty or fully black image; keeping the previous wallpaper")
+                setStatus("Skipped an image that is completely transparent; keeping the previous wallpaper")
                 return null
             }
             preferences().edit().putString("last_image_quality", "${decoded.width}×${decoded.height} image loaded").apply()
             return decoded
         }
         /**
-         * Reject decoder failures that return a valid-sized but effectively
-         * black bitmap. Sample a grid instead of checking every pixel. The
-         * threshold is deliberately strict so dark photographs remain valid.
+         * Reject only images whose sampled pixels are all fully transparent.
+         * Completely black photographs are valid wallpapers and must not be
+         * mistaken for decoder failures.
          */
-        private fun isFailedBlackFrame(image: Bitmap): Boolean {
-            if (image.width < 2 || image.height < 2) return true
+        private fun isFullyTransparent(image: Bitmap): Boolean {
+            if (image.width < 2 || image.height < 2) return false
             val grid = 12
-            var nearBlack = 0
-            var samples = 0
             for (row in 0 until grid) {
                 for (column in 0 until grid) {
                     val x = ((column + 0.5f) * image.width / grid).toInt().coerceIn(0, image.width - 1)
                     val y = ((row + 0.5f) * image.height / grid).toInt().coerceIn(0, image.height - 1)
-                    val pixel = image.getPixel(x, y)
-                    val alpha = android.graphics.Color.alpha(pixel)
-                    val red = android.graphics.Color.red(pixel)
-                    val green = android.graphics.Color.green(pixel)
-                    val blue = android.graphics.Color.blue(pixel)
-                    if (alpha >= 8 && red <= 5 && green <= 5 && blue <= 5) nearBlack++
-                    samples++
+                    if (android.graphics.Color.alpha(image.getPixel(x, y)) > 0) return false
                 }
             }
-            return samples > 0 && nearBlack.toFloat() / samples >= 0.98f
+            return true
         }
 
         private fun drawImage(canvas: Canvas, image: Bitmap, alpha: Int) {
@@ -544,40 +543,67 @@ class ShuffleLiveWallpaperService : WallpaperService() {
         }
 
         private fun drawFrame() {
-            val image = bitmap ?: return
-            if (!surfaceReady) return
+            val image = bitmap ?: previousBitmap ?: return
+            if (!surfaceReady || destroyed) return
             val holder = surfaceHolder
             var canvas: Canvas? = null
+            var shouldRetry = false
             try {
                 canvas = holder.lockCanvas()
-                if (canvas != null) {
+                if (canvas == null) {
+                    shouldRetry = true
+                } else {
+                    // Always render a complete frame. A real black photograph is
+                    // valid; the black fill is only the background for FIT images.
                     canvas.drawColor(Color.BLACK)
                     val old = previousBitmap
                     val elapsed = SystemClock.uptimeMillis() - transitionStartedAt
                     val progress = if (old == null) 1f
                         else (elapsed.toFloat() / transitionDurationMs).coerceIn(0f, 1f)
-                    if (old != null && progress < 1f) {
-                        drawImage(canvas, old, 255)
-                        drawImage(canvas, image, (progress * 255).toInt())
-                    } else {
-                        drawImage(canvas, image, 255)
-                        if (old != null) {
-                            previousBitmap = null
-                            old.recycle()
-                            handler.removeCallbacks(fadeTask)
+                    try {
+                        if (old != null && progress < 1f) {
+                            drawImage(canvas, old, 255)
+                            drawImage(canvas, image, (progress * 255).toInt())
+                        } else {
+                            drawImage(canvas, image, 255)
+                            if (old != null) {
+                                previousBitmap = null
+                                old.recycle()
+                                handler.removeCallbacks(fadeTask)
+                            }
+                        }
+                    } catch (drawError: Exception) {
+                        // If the new frame fails, make one attempt to show the
+                        // last known-good frame instead of leaving a blank canvas.
+                        val fallback = old?.takeIf { !it.isRecycled }
+                        if (fallback != null && fallback !== image) {
+                            canvas.drawColor(Color.BLACK)
+                            drawImage(canvas, fallback, 255)
+                            setStatus("New wallpaper could not be drawn; previous wallpaper restored")
+                        } else {
+                            setStatus("Wallpaper image could not be drawn; retrying")
+                            shouldRetry = true
                         }
                     }
                 }
-            } catch (_: Exception) {
+            } catch (error: OutOfMemoryError) {
+                setStatus("Low memory while drawing wallpaper; keeping the last available image")
+                shouldRetry = true
+            } catch (error: Exception) {
                 setStatus("Wallpaper display surface is temporarily unavailable")
+                shouldRetry = true
             } finally {
                 if (canvas != null) {
                     try {
                         holder.unlockCanvasAndPost(canvas)
                     } catch (_: Exception) {
-                        // Surface may have been destroyed while drawing.
+                        shouldRetry = true
                     }
                 }
+            }
+            if (shouldRetry && !destroyed && surfaceReady) {
+                handler.removeCallbacks(drawRetryTask)
+                handler.postDelayed(drawRetryTask, 500L)
             }
         }
     }
