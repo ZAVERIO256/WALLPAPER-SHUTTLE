@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ImageDecoder
 import android.graphics.Paint
 import android.graphics.RectF
 import android.net.Uri
@@ -335,16 +336,8 @@ class ShuffleLiveWallpaperService : WallpaperService() {
                     break
                 }
                 failedAttempts++
-                // A file that cannot be decoded (including a confirmed blank or
-                // near-solid-black frame) is removed from the selected tree so
-                // it cannot poison later shuffle cycles. SAF may refuse deletion;
-                // in that case it remains skipped for this pass.
-                val removed = deleteImageFromSelectedTree(root, candidate)
-                if (removed) {
-                    setStatus("Removed an unreadable or blank image; continuing rotation")
-                } else {
-                    setStatus("Skipped an unreadable or blank image; storage did not allow automatic deletion")
-                }
+                // Keep the original file. Skip this candidate for the current pass only;
+                // never delete user photos automatically.
                 if (requestedUri == null || requestedInBag != null) consumedBagEntries++
             }
             if (consumedBagEntries > 0) {
@@ -375,11 +368,10 @@ class ShuffleLiveWallpaperService : WallpaperService() {
 
             if (newBitmap == null || selectedUri == null) {
                 prefs.edit()
-                    .putInt("unreadable_image_count", prefs.getInt("unreadable_image_count", 0) + failedAttempts)
-                    .putString(
+                        .putString(
                         "last_rotation_status",
-                        if (bitmap != null) "Bad images skipped or removed. Keeping the previous wallpaper"
-                        else "No readable images remain. Add or re-select images to resume rotation"
+                        if (bitmap != null) "Unreadable images skipped for this pass. Keeping the previous wallpaper"
+                        else "No readable images found. Check the folder or image format"
                     )
                     .apply()
                 // Do not stop the engine or publish a black frame. If more
@@ -431,88 +423,65 @@ class ShuffleLiveWallpaperService : WallpaperService() {
          * camera images can otherwise consume tens of megabytes per bitmap,
          * especially while two images overlap during the crossfade.
          */
-        private fun deleteImageFromSelectedTree(root: DocumentFile, target: Uri): Boolean {
-            val pending = ArrayDeque<DocumentFile>()
-            val visited = HashSet<String>()
-            pending.add(root)
-            while (pending.isNotEmpty()) {
-                val folder = pending.removeFirst()
-                if (!visited.add(folder.uri.toString())) continue
-                val children = try { folder.listFiles() } catch (_: Exception) { continue }
-                for (child in children) {
-                    try {
-                        if (child.uri == target) return child.delete()
-                        if (child.isDirectory) pending.addLast(child)
-                    } catch (_: Exception) {
-                        // Keep scanning other entries if one provider item fails.
-                    }
-                }
-            }
-            return false
-        }
 
         private fun decodeForWallpaper(uri: Uri): Bitmap? {
-            if (surfaceWidth <= 0 || surfaceHeight <= 0) {
-                val image = contentResolver.openInputStream(uri)?.use {
-                    BitmapFactory.decodeStream(it)
-                } ?: return null
-                if (isFailedBlackFrame(image)) {
-                    image.recycle()
-                    setStatus("Skipped an empty or black image; keeping the previous wallpaper")
-                    return null
-                }
-                return image
-            }
-
-            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            contentResolver.openInputStream(uri)?.use {
-                BitmapFactory.decodeStream(it, null, bounds)
-            }
-            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-
             val mode = preferences().getString("display_mode", "crop") ?: "crop"
-            val sourceWidth = bounds.outWidth.toFloat()
-            val sourceHeight = bounds.outHeight.toFloat()
-            val scaleX = surfaceWidth / sourceWidth
-            val scaleY = surfaceHeight / sourceHeight
-            val renderScale = when (mode) {
-                "fit" -> minOf(scaleX, scaleY)
-                "stretch" -> 1f
-                else -> maxOf(scaleX, scaleY)
-            }.coerceAtLeast(0.0001f)
+            val decoded = if (android.os.Build.VERSION.SDK_INT >= 28) {
+                val source = ImageDecoder.createSource(contentResolver, uri)
+                ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                    decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                    decoder.isMutableRequired = false
+                    if (surfaceWidth > 0 && surfaceHeight > 0) {
+                        val sourceWidth = info.size.width.toFloat()
+                        val sourceHeight = info.size.height.toFloat()
+                        val scaleX = surfaceWidth / sourceWidth
+                        val scaleY = surfaceHeight / sourceHeight
+                        val renderScale = when (mode) {
+                            "fit" -> minOf(scaleX, scaleY)
+                            "stretch" -> 1f
+                            else -> maxOf(scaleX, scaleY)
+                        }.coerceAtLeast(0.0001f)
+                        val requiredWidth = (surfaceWidth / renderScale).toInt().coerceAtLeast(1)
+                        val requiredHeight = (surfaceHeight / renderScale).toInt().coerceAtLeast(1)
+                        val sample = maxOf(1, minOf(info.size.width / requiredWidth, info.size.height / requiredHeight))
+                        var powerOfTwoSample = 1
+                        while (powerOfTwoSample * 2 <= sample) powerOfTwoSample *= 2
+                        decoder.setTargetSampleSize(powerOfTwoSample)
+                    }
+                }
+            } else {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+                if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+                var sampleSize = 1
+                if (surfaceWidth > 0 && surfaceHeight > 0) {
+                    val scaleX = surfaceWidth / bounds.outWidth.toFloat()
+                    val scaleY = surfaceHeight / bounds.outHeight.toFloat()
+                    val renderScale = when (mode) {
+                        "fit" -> minOf(scaleX, scaleY)
+                        "stretch" -> 1f
+                        else -> maxOf(scaleX, scaleY)
+                    }.coerceAtLeast(0.0001f)
+                    val requiredWidth = (surfaceWidth / renderScale).toInt().coerceAtLeast(1)
+                    val requiredHeight = (surfaceHeight / renderScale).toInt().coerceAtLeast(1)
+                    while (bounds.outWidth / (sampleSize * 2) >= requiredWidth && bounds.outHeight / (sampleSize * 2) >= requiredHeight) sampleSize *= 2
+                }
+                val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+                contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
+            } ?: return null
 
-            val requiredWidth = (surfaceWidth / renderScale).toInt().coerceAtLeast(1)
-            val requiredHeight = (surfaceHeight / renderScale).toInt().coerceAtLeast(1)
-            var sampleSize = 1
-            while (
-                bounds.outWidth / (sampleSize * 2) >= requiredWidth &&
-                bounds.outHeight / (sampleSize * 2) >= requiredHeight
-            ) {
-                sampleSize *= 2
-            }
-
-            val options = BitmapFactory.Options().apply {
-                inSampleSize = sampleSize
-            }
-            val decoded = contentResolver.openInputStream(uri)?.use {
-                BitmapFactory.decodeStream(it, null, options)
-            }
-            if (decoded != null && isFailedBlackFrame(decoded)) {
+            // Transparent pixels are not black. This matters for PNG images
+            // that intentionally use transparency around their artwork.
+            if (isFailedBlackFrame(decoded)) {
                 decoded.recycle()
-                setStatus("Skipped an empty or black image; keeping the previous wallpaper")
+                setStatus("Skipped an empty or fully black image; keeping the previous wallpaper")
                 return null
             }
-            if (decoded != null) {
-                preferences().edit()
-                    .putString(
-                        "last_image_quality",
-                        "${bounds.outWidth}×${bounds.outHeight} source → ${decoded.width}×${decoded.height} loaded"
-                    )
-                    .apply()
-            }
+            preferences().edit()
+                .putString("last_image_quality", "${decoded.width}×${decoded.height} image loaded")
+                .apply()
             return decoded
         }
-
         /**
          * Reject decoder failures that return a valid-sized but effectively
          * black bitmap. Sample a grid instead of checking every pixel. The
@@ -532,7 +501,7 @@ class ShuffleLiveWallpaperService : WallpaperService() {
                     val red = android.graphics.Color.red(pixel)
                     val green = android.graphics.Color.green(pixel)
                     val blue = android.graphics.Color.blue(pixel)
-                    if (alpha < 8 || (red <= 5 && green <= 5 && blue <= 5)) nearBlack++
+                    if (alpha >= 8 && red <= 5 && green <= 5 && blue <= 5) nearBlack++
                     samples++
                 }
             }
