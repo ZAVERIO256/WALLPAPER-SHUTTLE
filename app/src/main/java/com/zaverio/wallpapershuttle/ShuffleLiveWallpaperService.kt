@@ -242,7 +242,9 @@ class ShuffleLiveWallpaperService : WallpaperService() {
         private fun shuffleBagCandidates(eligible: List<Uri>): List<Uri> {
             val prefs = preferences()
             val current = eligible.map { it.toString() }.distinct()
-            val signature = current.sorted().joinToString("\n")
+            // Store a compact catalogue fingerprint instead of thousands of
+            // URI characters in SharedPreferences on every shuffle refresh.
+            val signature = "${current.size}:${current.sorted().hashCode()}"
             var bag = try {
                 val saved = JSONArray(prefs.getString("shuffle_bag_uris", "[]"))
                 (0 until saved.length()).map { saved.getString(it) }
