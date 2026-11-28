@@ -1783,7 +1783,7 @@ fun WallpaperShuttleApp(context: Context) {
                             Text("kdavidtyra@gmail.com", color = Color.White, fontSize = 13.sp)
                             Text("+256 701 303 855", color = Color.White, fontSize = 13.sp)
                             Text("App: Wallpaper Shuttle", color = Color.LightGray, fontSize = 11.sp)
-                            Text("Version 1.26", color = Color.LightGray, fontSize = 11.sp)
+                            Text("Version 1.27", color = Color.LightGray, fontSize = 11.sp)
                         }
                     }
 
