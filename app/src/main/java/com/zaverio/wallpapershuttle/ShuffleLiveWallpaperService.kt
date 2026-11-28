@@ -365,16 +365,20 @@ class ShuffleLiveWallpaperService : WallpaperService() {
             var consumedBagEntries = 0
             for (candidate in attemptCandidates) {
                 val attempt = try { decodeForWallpaper(candidate) } catch (_: Exception) { null }
+                val bagIndex = bagCandidates.indexOf(candidate)
+                if (bagIndex >= 0 && (requestedUri == null || requestedInBag != null)) {
+                    // Consume the complete prefix through the selected entry.
+                    // Manual requests can be later in the bag; advancing by one
+                    // would leave already-passed entries available for repeats.
+                    consumedBagEntries = maxOf(consumedBagEntries, bagIndex + 1)
+                }
                 if (attempt != null) {
                     chosen = candidate
                     decoded = attempt
-                    if (requestedUri == null || requestedInBag != null) consumedBagEntries++
                     break
                 }
                 failedAttempts++
-                // Keep the original file. Skip this candidate for the current pass only;
-                // never delete user photos automatically.
-                if (requestedUri == null || requestedInBag != null) consumedBagEntries++
+                // Keep the original file. Skip only this attempt; never delete user photos.
             }
             if (consumedBagEntries > 0) {
                 prefs.edit().putInt(
