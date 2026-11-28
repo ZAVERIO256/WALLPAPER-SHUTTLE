@@ -104,6 +104,35 @@ class MainActivity : ComponentActivity() {
             WallpaperShuttleApp(this)
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        val prefs = getSharedPreferences("shuffle_wallpaper", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("live_wallpaper_pending_confirmation", false)) {
+            val activeComponent = runCatching {
+                WallpaperManager.getInstance(this)
+                    .getWallpaperInfo(WallpaperManager.FLAG_SYSTEM)?.component
+            }.getOrNull()
+            val expectedComponent = ComponentName(this, ShuffleLiveWallpaperService::class.java)
+            if (activeComponent == expectedComponent) {
+                prefs.edit()
+                    .putBoolean("rotation_enabled", true)
+                    .putBoolean("live_wallpaper_mode", true)
+                    .putBoolean("live_wallpaper_pending_confirmation", false)
+                    .putString("last_rotation_status", "Live wallpaper is active")
+                    .apply()
+            } else {
+                // The Android preview was dismissed without applying our wallpaper.
+                prefs.edit()
+                    .putBoolean("rotation_enabled", false)
+                    .putBoolean("live_wallpaper_mode", false)
+                    .putBoolean("live_wallpaper_pending_confirmation", false)
+                    .putLong("next_rotation_time", 0L)
+                    .putString("last_rotation_status", "Setup cancelled. Choose Set wallpaper to start rotation.")
+                    .apply()
+            }
+        }
+    }
 }
 
 private fun isImageFile(file: DocumentFile): Boolean {
@@ -244,6 +273,9 @@ fun WallpaperShuttleApp(context: Context) {
     LaunchedEffect(Unit) {
         while (true) {
             clockNow = System.currentTimeMillis()
+            val confirmedRunning = preferences.getBoolean("rotation_enabled", false) &&
+                !preferences.getBoolean("live_wallpaper_pending_confirmation", false)
+            if (rotationRunning != confirmedRunning) rotationRunning = confirmedRunning
             delay(1000L)
         }
     }
@@ -440,9 +472,15 @@ fun WallpaperShuttleApp(context: Context) {
 
         preferences.edit().putBoolean("rotation_enabled", false).putBoolean("live_wallpaper_mode", false).commit()
         WallpaperRotationService.stop(context)
-        preferences.edit().putBoolean("rotation_enabled", true).putBoolean("live_wallpaper_mode", true).putBoolean("foreground_rotation_service", false).putLong("next_rotation_time", System.currentTimeMillis()).commit()
-        rotationRunning = true
-        statusMessage = "Choose Set wallpaper in the Android preview to enable continuous live rotation."
+        preferences.edit()
+            .putBoolean("rotation_enabled", true)
+            .putBoolean("live_wallpaper_mode", true)
+            .putBoolean("foreground_rotation_service", false)
+            .putBoolean("live_wallpaper_pending_confirmation", true)
+            .putLong("next_rotation_time", System.currentTimeMillis())
+            .commit()
+        rotationRunning = false
+        statusMessage = "Confirm Set wallpaper in Android's preview. Rotation starts after confirmation."
         try {
             val liveWallpaperIntent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
                 putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT, ComponentName(context, ShuffleLiveWallpaperService::class.java))
