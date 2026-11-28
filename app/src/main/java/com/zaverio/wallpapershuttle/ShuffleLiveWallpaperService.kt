@@ -417,9 +417,15 @@ class ShuffleLiveWallpaperService : WallpaperService() {
          */
         private fun decodeForWallpaper(uri: Uri): Bitmap? {
             if (surfaceWidth <= 0 || surfaceHeight <= 0) {
-                return contentResolver.openInputStream(uri)?.use {
+                val image = contentResolver.openInputStream(uri)?.use {
                     BitmapFactory.decodeStream(it)
+                } ?: return null
+                if (isFailedBlackFrame(image)) {
+                    image.recycle()
+                    setStatus("Skipped an empty or black image; keeping the previous wallpaper")
+                    return null
                 }
+                return image
             }
 
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -455,6 +461,11 @@ class ShuffleLiveWallpaperService : WallpaperService() {
             val decoded = contentResolver.openInputStream(uri)?.use {
                 BitmapFactory.decodeStream(it, null, options)
             }
+            if (decoded != null && isFailedBlackFrame(decoded)) {
+                decoded.recycle()
+                setStatus("Skipped an empty or black image; keeping the previous wallpaper")
+                return null
+            }
             if (decoded != null) {
                 preferences().edit()
                     .putString(
@@ -464,6 +475,32 @@ class ShuffleLiveWallpaperService : WallpaperService() {
                     .apply()
             }
             return decoded
+        }
+
+        /**
+         * Reject decoder failures that return a valid-sized but effectively
+         * black bitmap. Sample a grid instead of checking every pixel. The
+         * threshold is deliberately strict so dark photographs remain valid.
+         */
+        private fun isFailedBlackFrame(image: Bitmap): Boolean {
+            if (image.width < 2 || image.height < 2) return true
+            val grid = 12
+            var nearBlack = 0
+            var samples = 0
+            for (row in 0 until grid) {
+                for (column in 0 until grid) {
+                    val x = ((column + 0.5f) * image.width / grid).toInt().coerceIn(0, image.width - 1)
+                    val y = ((row + 0.5f) * image.height / grid).toInt().coerceIn(0, image.height - 1)
+                    val pixel = image.getPixel(x, y)
+                    val alpha = android.graphics.Color.alpha(pixel)
+                    val red = android.graphics.Color.red(pixel)
+                    val green = android.graphics.Color.green(pixel)
+                    val blue = android.graphics.Color.blue(pixel)
+                    if (alpha < 8 || (red <= 5 && green <= 5 && blue <= 5)) nearBlack++
+                    samples++
+                }
+            }
+            return samples > 0 && nearBlack.toFloat() / samples >= 0.98f
         }
 
         private fun drawImage(canvas: Canvas, image: Bitmap, alpha: Int) {
